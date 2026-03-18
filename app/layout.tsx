@@ -30,6 +30,7 @@ export default function RootLayout({
     <html lang="no" className={`${geist.variable} ${jetbrainsMono.variable}`}>
       <body className="bg-base text-[#F5F5F5] font-sans antialiased">
         <ConvexClientProvider>{children}</ConvexClientProvider>
+        {/* Fixed noise overlay for subtle analogue texture */}
         <div className="fixed inset-0 z-10 pointer-events-none noise-overlay" />
       </body>
     </html>
