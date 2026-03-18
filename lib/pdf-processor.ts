@@ -15,41 +15,49 @@ export async function convertPdfToMarkdown(pdfBuffer: Buffer): Promise<string> {
     await writeFile(inputPath, pdfBuffer);
     await mkdir(outputDir, { recursive: true });
 
-    // opendataloader-pdf may crash on image extraction (RasterFormatException)
-    // even when outputting plain markdown. The text is usually written before
-    // the crash, so we check for output regardless of exit code.
     try {
       await execFileAsync("npx", [
         "@opendataloader/pdf",
         inputPath,
         "-o", outputDir,
         "-f", "markdown",
-        "-q",
       ], {
-        timeout: 300000, // 5 min for large PDFs
+        timeout: 300000,
         maxBuffer: 50 * 1024 * 1024,
       });
     } catch (execError: any) {
-      // Check if markdown was generated despite the error
-      const files = await readdir(outputDir).catch(() => []);
-      const mdFile = files.find((f: string) => f.endsWith(".md"));
-      if (mdFile) {
-        const content = await readFile(join(outputDir, mdFile), "utf-8");
-        if (content.length > 0) {
-          console.warn("opendataloader-pdf exited with error but markdown was generated, using partial output");
-          return content;
-        }
+      // Always check if markdown was generated despite the error.
+      // opendataloader-pdf often writes the markdown before crashing
+      // on image extraction (RasterFormatException, etc.)
+      const mdContent = await tryReadMarkdown(outputDir);
+      if (mdContent) {
+        console.warn("opendataloader-pdf crashed but markdown was recovered from output");
+        return mdContent;
       }
-      // No usable output — re-throw
-      throw execError;
+
+      // No output — build a useful error message from stderr
+      const stderr = execError.stderr || "";
+      const severeMatch = stderr.match(/SEVERE:.*$/m);
+      const errorDetail = severeMatch ? severeMatch[0] : stderr.slice(-500);
+      throw new Error(`PDF conversion failed: ${errorDetail || execError.message}`);
     }
 
-    const files = await readdir(outputDir);
-    const mdFile = files.find((f) => f.endsWith(".md"));
-    if (!mdFile) throw new Error("No markdown output generated");
-
-    return await readFile(join(outputDir, mdFile), "utf-8");
+    const mdContent = await tryReadMarkdown(outputDir);
+    if (!mdContent) throw new Error("No markdown output generated");
+    return mdContent;
   } finally {
     await rm(tempDir, { recursive: true, force: true });
+  }
+}
+
+async function tryReadMarkdown(outputDir: string): Promise<string | null> {
+  try {
+    const files = await readdir(outputDir);
+    const mdFile = files.find((f) => f.endsWith(".md"));
+    if (!mdFile) return null;
+    const content = await readFile(join(outputDir, mdFile), "utf-8");
+    return content.length > 0 ? content : null;
+  } catch {
+    return null;
   }
 }
