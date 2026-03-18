@@ -8,6 +8,8 @@
 
 **Tech Stack:** Next.js 15, React 19, Tailwind CSS, Recharts, Convex, opendataloader-pdf, OpenAI API (GPT-4o + text-embedding-3-small)
 
+**Design Language:** Bloomberg Terminal meets Scandinavian minimalism. Dark warm charcoal base, teal accent palette, JetBrains Mono for financial data, Geist for UI text, Phosphor Icons, borderless elevation cards. See `docs/superpowers/specs/2026-03-18-finansanalyse-frontend-prompt-design.md` for full spec.
+
 **Spec:** `docs/superpowers/specs/2026-03-18-finance-rag-platform-design.md`
 
 ---
@@ -17,7 +19,8 @@
 ```
 finance-test/
 ├── app/
-│   ├── layout.tsx                          # Root layout with ConvexProvider, Norwegian lang tag
+│   ├── layout.tsx                          # Root layout with fonts, ConvexProvider, noise overlay
+│   ├── convex-client-provider.tsx           # Convex client wrapper
 │   ├── page.tsx                            # Home: company list + add company
 │   ├── selskap/
 │   │   └── [id]/
@@ -27,22 +30,22 @@ finance-test/
 │   │   │   └── route.ts                    # PDF upload + processing pipeline
 │   │   └── chat/
 │   │       └── route.ts                    # Streaming RAG chat
-│   └── globals.css                         # Tailwind imports
+│   └── globals.css                         # Tailwind imports, noise overlay, base dark styles
 ├── components/
-│   ├── company-list.tsx                    # Company cards grid
-│   ├── add-company-dialog.tsx              # Modal for adding company
+│   ├── company-list.tsx                    # Company cards grid (elevation, dark theme)
+│   ├── add-company-dialog.tsx              # Modal for adding company (dark)
 │   ├── upload-dropzone.tsx                 # Batch drag-and-drop PDF upload
 │   ├── chat-interface.tsx                  # Chat UI with streaming + sources
 │   └── dashboard/
-│       ├── tabs.tsx                        # Tab navigation (Oversikt/Dokumenter/Chat)
+│       ├── tabs.tsx                        # Tab navigation with Phosphor icons on mobile
 │       ├── overview-tab.tsx                # KPIs + charts layout
 │       ├── documents-tab.tsx               # Document list + upload zone
 │       ├── chat-tab.tsx                    # Chat wrapper for dashboard context
-│       ├── kpi-card.tsx                    # Single KPI with change indicator
-│       ├── revenue-chart.tsx               # Bar/line chart for revenue
-│       ├── margins-chart.tsx               # Multi-line margins chart
-│       ├── cashflow-chart.tsx              # Cash flow visualization
-│       └── comparison-table.tsx            # Metrics table across periods
+│       ├── kpi-card.tsx                    # Single KPI (JetBrains Mono values, teal accent)
+│       ├── revenue-chart.tsx               # Bar/line chart (teal monochromatic)
+│       ├── margins-chart.tsx               # Multi-line margins chart (teal spectrum)
+│       ├── cashflow-chart.tsx              # Cash flow visualization (grouped bars)
+│       └── comparison-table.tsx            # Metrics table (dark, no outer border)
 ├── convex/
 │   ├── schema.ts                           # Full Convex schema (6 tables)
 │   ├── companies.ts                        # Company CRUD mutations + queries
@@ -64,7 +67,7 @@ finance-test/
 │   └── period-format.test.ts               # Period canonicalization tests
 ├── convex.json                             # Convex config (created by npx convex dev)
 ├── next.config.ts                          # Next.js config
-├── tailwind.config.ts                      # Tailwind config
+├── tailwind.config.ts                      # Tailwind config with full design token set
 ├── tsconfig.json                           # TypeScript config
 ├── package.json                            # Dependencies
 └── .env.local                              # CONVEX_URL, OPENAI_API_KEY
@@ -76,24 +79,18 @@ finance-test/
 
 **Files:**
 - Recreate: `package.json`
-- Create: `next.config.ts`, `tailwind.config.ts`, `tsconfig.json`, `app/layout.tsx`, `app/globals.css`, `app/page.tsx`, `postcss.config.mjs`
+- Create: `next.config.ts`, `tailwind.config.ts`, `tsconfig.json`, `app/layout.tsx`, `app/convex-client-provider.tsx`, `app/globals.css`, `app/page.tsx`, `postcss.config.mjs`
 
-This task sets up Next.js 15 with Tailwind CSS and all dependencies in the existing project directory. Since the current project is nearly empty (just a bare package.json and empty convex/), we scaffold Next.js into it.
+This task sets up Next.js 15 with Tailwind CSS, the full design token system, fonts, and all dependencies.
 
 - [ ] **Step 1: Initialize Next.js project**
 
-Run from the project root. This replaces the bare package.json with a full Next.js project:
-
 ```bash
 cd /Users/jonas/Desktop/Projects/finance-test
-# Back up .env.local (has CONVEX_URL)
 cp .env.local .env.local.bak
-# Remove current minimal files to allow clean scaffold
 rm package.json
 rm -rf node_modules convex
-# Create Next.js project in current directory
 npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir=false --import-alias="@/*" --turbopack --yes
-# Restore .env.local
 cp .env.local.bak .env.local && rm .env.local.bak
 ```
 
@@ -103,19 +100,83 @@ Expected: Next.js project created with `app/` directory, `tailwind.config.ts`, `
 
 ```bash
 cd /Users/jonas/Desktop/Projects/finance-test
-npm install convex openai recharts @opendataloader/pdf
+npm install convex openai recharts @opendataloader/pdf @phosphor-icons/react
 npm install -D vitest @testing-library/react @testing-library/jest-dom
 ```
 
-- [ ] **Step 3: Configure Convex in Next.js**
+Note: `@phosphor-icons/react` is tree-shakeable — individual icon imports add ~1KB each.
 
-Update `app/layout.tsx` to wrap the app in ConvexProvider:
+- [ ] **Step 3: Configure Tailwind with design tokens**
+
+Replace the generated `tailwind.config.ts` with the full design token set:
+
+```ts
+// tailwind.config.ts
+import type { Config } from "tailwindcss";
+
+const config: Config = {
+  content: [
+    "./app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./components/**/*.{js,ts,jsx,tsx,mdx}",
+  ],
+  theme: {
+    extend: {
+      colors: {
+        base: "#1A1A1E",
+        elevated: "#232323",
+        accent: {
+          DEFAULT: "#2DD4BF",
+          light: "#5eead4",
+          mid: "#14b8a6",
+          muted: "#1a8a7d",
+          subtle: "#134e48",
+        },
+        positive: "#4ade80",
+        negative: "#f87171",
+        warning: "#fbbf24",
+        neutral: "#6b7280",
+      },
+      fontFamily: {
+        sans: ["var(--font-sans)"],
+        mono: ["var(--font-mono)"],
+      },
+      borderRadius: {
+        card: "10px",
+      },
+      boxShadow: {
+        card: "0 2px 8px rgba(0,0,0,0.5), 0 8px 24px rgba(0,0,0,0.3)",
+        "card-hover":
+          "0 4px 12px rgba(0,0,0,0.4), 0 12px 28px rgba(0,0,0,0.25)",
+      },
+    },
+  },
+  plugins: [],
+};
+
+export default config;
+```
+
+- [ ] **Step 4: Configure fonts and root layout**
 
 ```tsx
 // app/layout.tsx
 import type { Metadata } from "next";
+import localFont from "next/font/local";
+import { JetBrains_Mono } from "next/font/google";
 import { ConvexClientProvider } from "./convex-client-provider";
 import "./globals.css";
+
+const geist = localFont({
+  src: "./fonts/GeistVF.woff2",
+  variable: "--font-sans",
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "FinansAnalyse",
@@ -128,9 +189,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="no">
-      <body>
+    <html lang="no" className={`${geist.variable} ${jetbrainsMono.variable}`}>
+      <body className="bg-base text-[#F5F5F5] font-sans antialiased">
         <ConvexClientProvider>{children}</ConvexClientProvider>
+        {/* Noise overlay for subtle analogue texture */}
+        <div className="fixed inset-0 z-10 pointer-events-none noise-overlay" />
       </body>
     </html>
   );
@@ -148,11 +211,77 @@ import { ReactNode } from "react";
 const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 export function ConvexClientProvider({ children }: { children: ReactNode }) {
-  return <ConvexProvider client={convex}>{children}</ConvexClientProvider>;
+  return <ConvexProvider client={convex}>{children}</ConvexProvider>;
 }
 ```
 
-- [ ] **Step 4: Add OPENAI_API_KEY to .env.local**
+- [ ] **Step 5: Set up globals.css with dark theme base styles**
+
+```css
+/* app/globals.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Noise overlay — subtle analogue texture */
+.noise-overlay {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.03;
+}
+
+/* Subtle radial teal glow on page background */
+body {
+  background-image: radial-gradient(
+    ellipse at 20% 0%,
+    rgba(45, 212, 191, 0.03) 0%,
+    transparent 60%
+  );
+  background-attachment: fixed;
+}
+
+/* Faint horizontal rules between major sections */
+.section-divider {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+/* Skeleton shimmer for loading states */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    #232323 25%,
+    rgba(255, 255, 255, 0.04) 50%,
+    #232323 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 10px;
+}
+
+/* Input focus glow */
+input:focus, textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(45, 212, 191, 0.3);
+}
+
+/* Scrollbar styling for dark theme */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #1A1A1E;
+}
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 3px;
+}
+```
+
+- [ ] **Step 6: Add OPENAI_API_KEY to .env.local**
 
 Append to existing `.env.local`:
 
@@ -160,36 +289,33 @@ Append to existing `.env.local`:
 OPENAI_API_KEY=sk-your-key-here
 ```
 
-Note: The `NEXT_PUBLIC_CONVEX_URL` should already be set from the earlier `npx convex dev` setup. Verify it exists.
-
-- [ ] **Step 5: Create placeholder home page**
+- [ ] **Step 7: Create placeholder home page**
 
 ```tsx
 // app/page.tsx
 export default function Home() {
   return (
     <main className="min-h-screen p-8">
-      <h1 className="text-3xl font-bold">FinansAnalyse</h1>
-      <p className="mt-2 text-gray-500">Analyser norske selskaper gjennom finansrapporter</p>
+      <h1 className="text-3xl font-bold font-sans">FinansAnalyse</h1>
+      <p className="mt-2 text-[#AAAAAA]">Analyser norske selskaper gjennom finansrapporter</p>
     </main>
   );
 }
 ```
 
-- [ ] **Step 6: Verify dev server starts**
+- [ ] **Step 8: Verify dev server starts**
 
 ```bash
-cd /Users/jonas/Desktop/Projects/finance-test
 npm run dev
 ```
 
-Expected: Next.js dev server starts on http://localhost:3000, shows the placeholder page.
+Expected: Dark-themed page at http://localhost:3000 with Geist font, warm charcoal background, noise overlay visible.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add -A
-git commit -m "feat: scaffold Next.js 15 project with Tailwind, Convex, and dependencies"
+git commit -m "feat: scaffold Next.js 15 with dark theme, design tokens, fonts, and dependencies"
 ```
 
 ---
@@ -368,7 +494,6 @@ export const updateStatus = mutation({
   },
   handler: async (ctx, args) => {
     const { id, ...fields } = args;
-    // Remove undefined fields before patching
     const patch: Record<string, any> = {};
     for (const [key, value] of Object.entries(fields)) {
       if (value !== undefined) patch[key] = value;
@@ -380,7 +505,6 @@ export const updateStatus = mutation({
 export const remove = mutation({
   args: { id: v.id("documents") },
   handler: async (ctx, args) => {
-    // Delete associated chunks
     const chunks = await ctx.db
       .query("chunks")
       .withIndex("by_document", (q) => q.eq("documentId", args.id))
@@ -388,7 +512,6 @@ export const remove = mutation({
     for (const chunk of chunks) {
       await ctx.db.delete(chunk._id);
     }
-    // Delete associated metrics
     const doc = await ctx.db.get(args.id);
     if (doc) {
       const metrics = await ctx.db
@@ -415,7 +538,7 @@ export const generateUploadUrl = mutation({
 
 ```ts
 // convex/chunks.ts
-import { mutation, action } from "./_generated/server";
+import { query, mutation, action } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
 
@@ -445,7 +568,6 @@ export const search = action({
       limit: args.limit ?? 8,
       filter: (q) => q.eq("companyId", args.companyId),
     });
-    // Fetch full chunk documents
     const chunks = await Promise.all(
       results.map(async (result) => {
         const chunk = await ctx.runQuery(api.chunks.getById, { id: result._id });
@@ -621,14 +743,22 @@ export function CompanyList() {
   const companies = useQuery(api.companies.list);
 
   if (companies === undefined) {
-    return <div className="text-gray-500">Laster selskaper...</div>;
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="skeleton h-28" />
+        ))}
+      </div>
+    );
   }
 
   if (companies.length === 0) {
     return (
-      <div className="text-center py-12 text-gray-500">
-        <p className="text-lg">Ingen selskaper lagt til ennå</p>
-        <p className="text-sm mt-1">Legg til et selskap for å komme i gang</p>
+      <div className="text-center py-20">
+        <p className="text-lg text-[#666666]">Ingen selskaper lagt til ennå</p>
+        <p className="text-sm text-[#666666] mt-1">
+          Legg til et selskap for å komme i gang
+        </p>
       </div>
     );
   }
@@ -639,14 +769,18 @@ export function CompanyList() {
         <Link
           key={company._id}
           href={`/selskap/${company._id}`}
-          className="block p-6 rounded-lg border border-gray-200 hover:border-blue-400 hover:shadow-md transition-all"
+          className="block p-5 bg-elevated rounded-card shadow-card hover:shadow-card-hover transition-shadow duration-150"
         >
-          <h3 className="text-lg font-semibold">{company.name}</h3>
+          <h3 className="text-base font-semibold font-sans">{company.name}</h3>
           {company.ticker && (
-            <span className="text-sm text-gray-500">{company.ticker}</span>
+            <span className="text-[11px] font-mono text-[#666666]">
+              {company.ticker}
+            </span>
           )}
           {company.description && (
-            <p className="text-sm text-gray-600 mt-2">{company.description}</p>
+            <p className="text-[13px] text-[#AAAAAA] mt-2 line-clamp-2">
+              {company.description}
+            </p>
           )}
         </Link>
       ))}
@@ -664,6 +798,7 @@ export function CompanyList() {
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useState } from "react";
+import { X } from "@phosphor-icons/react";
 
 export function AddCompanyDialog({
   open,
@@ -691,42 +826,54 @@ export function AddCompanyDialog({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md">
-        <h2 className="text-xl font-bold mb-4">Legg til selskap</h2>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+      <div className="bg-elevated rounded-card shadow-card p-6 w-full max-w-md">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-lg font-semibold">Legg til selskap</h2>
+          <button
+            onClick={onClose}
+            className="text-[#666666] hover:text-[#F5F5F5] transition-colors duration-150"
+          >
+            <X size={20} />
+          </button>
+        </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Selskapsnavn *</label>
+            <label className="block text-[9px] font-sans uppercase tracking-[1px] text-[#666666] mb-1.5">
+              Selskapsnavn
+            </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="f.eks. Equinor ASA"
-              className="w-full border rounded-md px-3 py-2"
+              className="w-full bg-base rounded-lg px-3 py-2.5 text-sm shadow-[inset_0_1px_3px_rgba(0,0,0,0.3)] placeholder:text-[#666666]"
               autoFocus
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Ticker (valgfritt)</label>
+            <label className="block text-[9px] font-sans uppercase tracking-[1px] text-[#666666] mb-1.5">
+              Ticker (valgfritt)
+            </label>
             <input
               type="text"
               value={ticker}
               onChange={(e) => setTicker(e.target.value)}
               placeholder="f.eks. EQNR"
-              className="w-full border rounded-md px-3 py-2"
+              className="w-full bg-base rounded-lg px-3 py-2.5 text-sm font-mono shadow-[inset_0_1px_3px_rgba(0,0,0,0.3)] placeholder:text-[#666666]"
             />
           </div>
-          <div className="flex justify-end gap-3">
+          <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800"
+              className="px-4 py-2 text-sm text-[#AAAAAA] border border-white/10 rounded-lg hover:text-[#F5F5F5] hover:border-white/20 transition-all duration-150"
             >
               Avbryt
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              className="px-4 py-2 text-sm bg-accent text-base rounded-lg hover:brightness-90 transition-all duration-150 font-medium"
             >
               Legg til
             </button>
@@ -747,6 +894,7 @@ export function AddCompanyDialog({
 import { useState } from "react";
 import { CompanyList } from "@/components/company-list";
 import { AddCompanyDialog } from "@/components/add-company-dialog";
+import { Plus } from "@phosphor-icons/react";
 
 export default function Home() {
   const [showDialog, setShowDialog] = useState(false);
@@ -755,16 +903,17 @@ export default function Home() {
     <main className="min-h-screen p-8 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold">FinansAnalyse</h1>
-          <p className="mt-1 text-gray-500">
+          <h1 className="text-2xl font-bold font-sans">FinansAnalyse</h1>
+          <p className="mt-1 text-sm text-[#AAAAAA]">
             Analyser norske selskaper gjennom finansrapporter
           </p>
         </div>
         <button
           onClick={() => setShowDialog(true)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          className="flex items-center gap-2 px-4 py-2 text-sm bg-accent text-base rounded-lg hover:brightness-90 transition-all duration-150 font-medium"
         >
-          + Legg til selskap
+          <Plus size={16} weight="bold" />
+          Legg til selskap
         </button>
       </div>
       <CompanyList />
@@ -776,17 +925,13 @@ export default function Home() {
 
 - [ ] **Step 4: Verify in browser**
 
-```bash
-npm run dev
-```
-
-Expected: Home page loads, shows empty state. Clicking "Legg til selskap" opens modal, creating a company shows it in the grid. Clicking a company navigates to `/selskap/[id]`.
+Expected: Dark-themed home page with warm charcoal background, noise overlay, elevation cards for companies, teal primary button.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add app/page.tsx components/
-git commit -m "feat: add home page with company list and add company dialog"
+git add app/page.tsx components/company-list.tsx components/add-company-dialog.tsx
+git commit -m "feat: add home page with company list and add company dialog (dark theme)"
 ```
 
 ---
@@ -853,34 +998,27 @@ const quarterWords: Record<string, string> = {
 export function canonicalizePeriod(input: string): string {
   const s = input.trim().toLowerCase();
 
-  // "Q1 2025" or "Q4 2024"
   const qMatch = s.match(/q(\d)\s*(\d{4})/);
   if (qMatch) return `${qMatch[2]}-Q${qMatch[1]}`;
 
-  // "1. kvartal 2025" or "første kvartal 2025"
   const kvMatch = s.match(/(\S+)\s*kvartal\s*(\d{4})/);
   if (kvMatch) {
     const q = quarterWords[kvMatch[1]] ?? kvMatch[1];
     if (/^[1-4]$/.test(q)) return `${kvMatch[2]}-Q${q}`;
   }
 
-  // "H1 2025" or "H2 2025"
   const hMatch = s.match(/h([12])\s*(\d{4})/);
   if (hMatch) return `${hMatch[2]}-H${hMatch[1]}`;
 
-  // "halvårsrapport 2025"
   const halvMatch = s.match(/halvårsrapport\s*(\d{4})/);
   if (halvMatch) return `${halvMatch[1]}-H1`;
 
-  // "FY 2024"
   const fyMatch = s.match(/fy\s*(\d{4})/);
   if (fyMatch) return `${fyMatch[1]}-FY`;
 
-  // "Årsrapport 2024"
   const arsMatch = s.match(/årsrapport\s*(\d{4})/);
   if (arsMatch) return `${arsMatch[1]}-FY`;
 
-  // Bare year "2024"
   const yearMatch = s.match(/^(\d{4})$/);
   if (yearMatch) return `${yearMatch[1]}-FY`;
 
@@ -956,27 +1094,22 @@ export interface Chunk {
 
 const MAX_CHUNK_TOKENS = 1000;
 const OVERLAP_TOKENS = 200;
-// Rough approximation: 1 token ≈ 4 chars
 const CHARS_PER_TOKEN = 4;
 const MAX_CHARS = MAX_CHUNK_TOKENS * CHARS_PER_TOKEN;
 
 export function chunkMarkdown(markdown: string): Chunk[] {
   if (!markdown.trim()) return [];
 
-  // Split on headings (h1, h2, h3)
   const sections = splitOnHeadings(markdown);
-
   const chunks: Chunk[] = [];
   let index = 0;
 
   for (const section of sections) {
     if (section.trim().length === 0) continue;
 
-    // If section fits in one chunk, keep it whole
     if (section.length <= MAX_CHARS) {
       chunks.push({ content: section.trim(), chunkIndex: index++ });
     } else {
-      // Split large sections on paragraph boundaries, but never split tables
       const subChunks = splitLargeSection(section);
       for (const sub of subChunks) {
         chunks.push({ content: sub.trim(), chunkIndex: index++ });
@@ -988,7 +1121,6 @@ export function chunkMarkdown(markdown: string): Chunk[] {
 }
 
 function splitOnHeadings(markdown: string): string[] {
-  // Split before # headings, keeping the heading with its content
   const parts = markdown.split(/(?=^#{1,3}\s)/m);
   return parts.filter((p) => p.trim().length > 0);
 }
@@ -999,12 +1131,8 @@ function splitLargeSection(section: string): string[] {
   let current = "";
 
   for (const para of paragraphs) {
-    // Never split a table — if a paragraph contains a table, keep it whole
-    const isTable = para.includes("|") && para.includes("---");
-
     if (current.length + para.length > MAX_CHARS && current.length > 0) {
       chunks.push(current);
-      // Add overlap from end of previous chunk
       const overlapChars = OVERLAP_TOKENS * CHARS_PER_TOKEN;
       const overlap = current.slice(-overlapChars);
       current = overlap + "\n\n" + para;
@@ -1035,43 +1163,38 @@ Expected: All tests PASS.
 // lib/pdf-processor.ts
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { readFile, mkdtemp, rm } from "fs/promises";
+import { readFile, writeFile, mkdir, mkdtemp, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 
 const execFileAsync = promisify(execFile);
 
 export async function convertPdfToMarkdown(pdfBuffer: Buffer): Promise<string> {
-  // Create temp directory for input/output
   const tempDir = await mkdtemp(join(tmpdir(), "finansanalyse-"));
   const inputPath = join(tempDir, "input.pdf");
   const outputDir = join(tempDir, "output");
 
   try {
-    // Write PDF to temp file
-    const { writeFile, mkdir } = await import("fs/promises");
     await writeFile(inputPath, pdfBuffer);
     await mkdir(outputDir, { recursive: true });
 
-    // Run opendataloader-pdf
     await execFileAsync("npx", [
       "@opendataloader/pdf",
       inputPath,
       "--output", outputDir,
       "--format", "markdown",
     ], {
-      timeout: 120000, // 2 min timeout
-      maxBuffer: 50 * 1024 * 1024, // 50MB buffer
+      timeout: 120000,
+      maxBuffer: 50 * 1024 * 1024,
     });
 
-    // Read the output markdown
-    const files = await import("fs/promises").then((fs) => fs.readdir(outputDir));
+    const { readdir } = await import("fs/promises");
+    const files = await readdir(outputDir);
     const mdFile = files.find((f) => f.endsWith(".md"));
     if (!mdFile) throw new Error("No markdown output generated");
 
     return await readFile(join(outputDir, mdFile), "utf-8");
   } finally {
-    // Clean up temp files
     await rm(tempDir, { recursive: true, force: true });
   }
 }
@@ -1139,7 +1262,6 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 }
 
 export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
-  // OpenAI supports batch embedding (up to 2048 inputs)
   const response = await openai.embeddings.create({
     model: "text-embedding-3-small",
     input: texts,
@@ -1229,10 +1351,6 @@ export interface ValidationResult {
   rejected: { metric: ExtractedMetric; reason: string }[];
 }
 
-const MARGIN_METRICS = [
-  "driftsmargin", "ebitda-margin", "netto_margin",
-];
-
 const NON_NEGATIVE_METRICS = [
   "driftsinntekter", "sum_eiendeler", "egenkapital",
 ];
@@ -1242,19 +1360,16 @@ export function validateMetrics(metrics: ExtractedMetric[]): ValidationResult {
   const rejected: { metric: ExtractedMetric; reason: string }[] = [];
 
   for (const metric of metrics) {
-    // Check margins are within -100% to 100%
     if (metric.unit === "%" && Math.abs(metric.value) > 100) {
       rejected.push({ metric, reason: `${metric.metricName}: value ${metric.value}% exceeds ±100%` });
       continue;
     }
 
-    // Check non-negative metrics
     if (NON_NEGATIVE_METRICS.includes(metric.metricName) && metric.value < 0) {
       rejected.push({ metric, reason: `${metric.metricName}: unexpected negative value ${metric.value}` });
       continue;
     }
 
-    // Flag low-confidence
     if (metric.confidence === "low") {
       valid.push({ ...metric, flagged: true });
     } else {
@@ -1328,7 +1443,7 @@ export async function extractFinancialData(markdown: string): Promise<Extraction
 npx vitest run __tests__/financial-extractor.test.ts
 ```
 
-Expected: All tests PASS (validation tests are unit tests that don't call OpenAI).
+Expected: All tests PASS.
 
 - [ ] **Step 7: Commit**
 
@@ -1343,8 +1458,6 @@ git commit -m "feat: add OpenAI embeddings, financial data extraction, and valid
 
 **Files:**
 - Create: `app/api/upload/route.ts`
-
-This wires together: file upload → Convex storage → opendataloader-pdf → chunking → embeddings → financial extraction → store everything.
 
 - [ ] **Step 1: Implement the upload API route**
 
@@ -1391,8 +1504,8 @@ export async function POST(req: NextRequest) {
           companyId: companyId as any,
           fileName: file.name,
           fileId: storageId,
-          reportType: "annet", // Will be updated by extraction
-          period: "unknown",   // Will be updated by extraction
+          reportType: "annet",
+          period: "unknown",
         });
 
         // 3. Convert PDF to Markdown
@@ -1410,9 +1523,7 @@ export async function POST(req: NextRequest) {
 
         // 5. Run both paths in parallel
         const [extractionResult, chunks] = await Promise.all([
-          // Path 2: Financial extraction
           extractFinancialData(markdown),
-          // Path 1: Chunking (embeddings come after)
           Promise.resolve(chunkMarkdown(markdown)),
         ]);
 
@@ -1473,23 +1584,15 @@ export async function POST(req: NextRequest) {
 
 - [ ] **Step 2: Test with a sample PDF manually**
 
-Use curl or the browser to test uploading a PDF. This requires `npx convex dev` running in another terminal.
-
 ```bash
-# Start Convex in one terminal
-npx convex dev
+npx convex dev    # Terminal 1
+npm run dev       # Terminal 2
 
-# Start Next.js in another
-npm run dev
-
-# Test with curl (replace IDs)
-# First create a company via the UI, then:
+# Create a company via the UI, then:
 curl -X POST http://localhost:3000/api/upload \
   -F "companyId=YOUR_COMPANY_ID" \
   -F "files=@sample-report.pdf"
 ```
-
-Expected: Returns JSON with processing results per file.
 
 - [ ] **Step 3: Commit**
 
@@ -1513,6 +1616,7 @@ git commit -m "feat: add PDF upload API route with full processing pipeline"
 
 import { useState, useCallback } from "react";
 import { Id } from "@/convex/_generated/dataModel";
+import { CloudArrowUp, CheckCircle, XCircle, CircleNotch } from "@phosphor-icons/react";
 
 interface UploadResult {
   fileName: string;
@@ -1555,7 +1659,11 @@ export function UploadDropzone({ companyId }: { companyId: Id<"companies"> }) {
         }))
       );
     } catch {
-      setResults(pdfFiles.map((f) => ({ fileName: f.name, status: "error", error: "Opplasting feilet" })));
+      setResults(pdfFiles.map((f) => ({
+        fileName: f.name,
+        status: "error",
+        error: "Opplasting feilet",
+      })));
     } finally {
       setIsUploading(false);
     }
@@ -1571,15 +1679,22 @@ export function UploadDropzone({ companyId }: { companyId: Id<"companies"> }) {
           setIsDragging(false);
           handleFiles(e.dataTransfer.files);
         }}
-        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-          isDragging ? "border-blue-500 bg-blue-50" : "border-gray-300"
+        className={`border border-dashed rounded-card p-8 text-center transition-all duration-150 ${
+          isDragging
+            ? "border-accent bg-accent-subtle/20"
+            : "border-white/10 hover:border-white/20"
         }`}
       >
-        <p className="text-gray-600">
+        <CloudArrowUp
+          size={32}
+          weight={isDragging ? "fill" : "light"}
+          className={`mx-auto mb-3 ${isDragging ? "text-accent" : "text-[#666666]"}`}
+        />
+        <p className="text-sm text-[#AAAAAA]">
           {isUploading ? "Prosesserer..." : "Dra og slipp PDF-filer her"}
         </p>
-        <p className="text-sm text-gray-400 mt-1">eller</p>
-        <label className="mt-2 inline-block px-4 py-2 bg-blue-600 text-white rounded-md cursor-pointer hover:bg-blue-700">
+        <p className="text-xs text-[#666666] mt-1">eller</p>
+        <label className="mt-3 inline-flex items-center gap-2 px-4 py-2 text-sm bg-accent text-base rounded-lg cursor-pointer hover:brightness-90 transition-all duration-150 font-medium">
           Velg filer
           <input
             type="file"
@@ -1594,16 +1709,21 @@ export function UploadDropzone({ companyId }: { companyId: Id<"companies"> }) {
       {results.length > 0 && (
         <div className="space-y-2">
           {results.map((r, i) => (
-            <div key={i} className="flex items-center gap-3 p-3 rounded-md bg-gray-50">
-              <span className={`text-sm font-medium ${
-                r.status === "ready" ? "text-green-600" :
-                r.status === "error" ? "text-red-600" :
-                "text-yellow-600"
-              }`}>
-                {r.status === "ready" ? "✓" : r.status === "error" ? "✗" : "⏳"}
-              </span>
-              <span className="text-sm">{r.fileName}</span>
-              {r.error && <span className="text-xs text-red-500">{r.error}</span>}
+            <div
+              key={i}
+              className="flex items-center gap-3 p-3 rounded-card bg-elevated"
+            >
+              {r.status === "ready" ? (
+                <CheckCircle size={18} weight="fill" className="text-positive" />
+              ) : r.status === "error" ? (
+                <XCircle size={18} weight="fill" className="text-negative" />
+              ) : (
+                <CircleNotch size={18} className="text-warning animate-spin" />
+              )}
+              <span className="text-sm font-sans">{r.fileName}</span>
+              {r.error && (
+                <span className="text-xs text-negative ml-auto">{r.error}</span>
+              )}
             </div>
           ))}
         </div>
@@ -1617,7 +1737,7 @@ export function UploadDropzone({ companyId }: { companyId: Id<"companies"> }) {
 
 ```bash
 git add components/upload-dropzone.tsx
-git commit -m "feat: add batch drag-and-drop PDF upload component"
+git commit -m "feat: add batch drag-and-drop PDF upload component (dark theme)"
 ```
 
 ---
@@ -1629,7 +1749,7 @@ git commit -m "feat: add batch drag-and-drop PDF upload component"
 - Create: `components/dashboard/tabs.tsx`
 - Create: `components/dashboard/documents-tab.tsx`
 
-- [ ] **Step 1: Create the dashboard page with tabs**
+- [ ] **Step 1: Create the dashboard page**
 
 ```tsx
 // app/selskap/[id]/page.tsx
@@ -1641,6 +1761,7 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { DashboardTabs } from "@/components/dashboard/tabs";
 import Link from "next/link";
+import { CaretLeft } from "@phosphor-icons/react";
 
 export default function CompanyPage() {
   const params = useParams();
@@ -1648,23 +1769,38 @@ export default function CompanyPage() {
   const company = useQuery(api.companies.get, { id: companyId });
 
   if (company === undefined) {
-    return <div className="p-8 text-gray-500">Laster...</div>;
+    return (
+      <div className="min-h-screen p-8">
+        <div className="skeleton h-8 w-48 mb-4" />
+        <div className="skeleton h-96" />
+      </div>
+    );
   }
 
   if (company === null) {
-    return <div className="p-8 text-red-500">Selskap ikke funnet</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-negative">Selskap ikke funnet</p>
+      </div>
+    );
   }
 
   return (
     <main className="min-h-screen">
       {/* Top nav */}
-      <div className="border-b px-8 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm">
-          <Link href="/" className="text-blue-600 hover:underline">Mine selskaper</Link>
-          <span className="text-gray-400">›</span>
-          <span className="font-semibold">{company.name}</span>
+      <div className="border-b border-white/5 px-8 py-4 flex items-center gap-3">
+        <Link
+          href="/"
+          className="text-[#666666] hover:text-[#AAAAAA] transition-colors duration-150"
+        >
+          <CaretLeft size={18} />
+        </Link>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold">{company.name}</span>
           {company.ticker && (
-            <span className="text-gray-500">({company.ticker})</span>
+            <span className="text-[11px] font-mono text-[#666666]">
+              {company.ticker}
+            </span>
           )}
         </div>
       </div>
@@ -1675,7 +1811,7 @@ export default function CompanyPage() {
 }
 ```
 
-- [ ] **Step 2: Create tab navigation component**
+- [ ] **Step 2: Create tab navigation with Phosphor icons for mobile**
 
 ```tsx
 // components/dashboard/tabs.tsx
@@ -1686,11 +1822,12 @@ import { Id } from "@/convex/_generated/dataModel";
 import { DocumentsTab } from "./documents-tab";
 import { OverviewTab } from "./overview-tab";
 import { ChatTab } from "./chat-tab";
+import { ChartBar, FileText, ChatCircle } from "@phosphor-icons/react";
 
 const TABS = [
-  { id: "oversikt", label: "Oversikt" },
-  { id: "dokumenter", label: "Dokumenter" },
-  { id: "chat", label: "Chat" },
+  { id: "oversikt", label: "Oversikt", icon: ChartBar },
+  { id: "dokumenter", label: "Dokumenter", icon: FileText },
+  { id: "chat", label: "Chat", icon: ChatCircle },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -1700,23 +1837,37 @@ export function DashboardTabs({ companyId }: { companyId: Id<"companies"> }) {
 
   return (
     <div>
-      <div className="border-b flex">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`px-6 py-3 text-sm font-medium transition-colors ${
-              activeTab === tab.id
-                ? "border-b-2 border-blue-600 text-blue-600"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="border-b border-white/5 flex">
+        {TABS.map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-6 py-3 text-sm font-medium transition-colors duration-150 flex items-center gap-2 ${
+                isActive
+                  ? "border-b-2 border-accent text-accent"
+                  : "text-[#666666] hover:text-[#AAAAAA]"
+              }`}
+            >
+              <Icon
+                size={18}
+                weight={isActive ? "fill" : "light"}
+                className="sm:hidden"
+              />
+              <Icon
+                size={16}
+                weight={isActive ? "fill" : "light"}
+                className="hidden sm:block"
+              />
+              <span className="hidden sm:inline">{tab.label}</span>
+            </button>
+          );
+        })}
       </div>
 
-      <div className="p-8">
+      <div className="p-8 max-w-7xl mx-auto">
         {activeTab === "oversikt" && <OverviewTab companyId={companyId} />}
         {activeTab === "dokumenter" && <DocumentsTab companyId={companyId} />}
         {activeTab === "chat" && <ChatTab companyId={companyId} />}
@@ -1736,6 +1887,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { UploadDropzone } from "../upload-dropzone";
+import { Trash } from "@phosphor-icons/react";
 
 export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
   const documents = useQuery(api.documents.listByCompany, { companyId });
@@ -1743,53 +1895,86 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-bold">Dokumenter</h2>
+      <h2 className="text-lg font-semibold">Dokumenter</h2>
 
       <UploadDropzone companyId={companyId} />
 
       {documents === undefined ? (
-        <p className="text-gray-500">Laster dokumenter...</p>
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="skeleton h-12" />
+          ))}
+        </div>
       ) : documents.length === 0 ? (
-        <p className="text-gray-500">Ingen dokumenter lastet opp ennå</p>
+        <p className="text-sm text-[#666666]">Ingen dokumenter lastet opp ennå</p>
       ) : (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b text-left text-gray-500">
-              <th className="py-2">Filnavn</th>
-              <th className="py-2">Type</th>
-              <th className="py-2">Periode</th>
-              <th className="py-2">Status</th>
-              <th className="py-2"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {documents.map((doc) => (
-              <tr key={doc._id} className="border-b">
-                <td className="py-2">{doc.fileName}</td>
-                <td className="py-2">{doc.reportType}</td>
-                <td className="py-2">{doc.period}</td>
-                <td className="py-2">
-                  <span className={`text-xs px-2 py-1 rounded ${
-                    doc.status === "ready" ? "bg-green-100 text-green-700" :
-                    doc.status === "error" ? "bg-red-100 text-red-700" :
-                    "bg-yellow-100 text-yellow-700"
-                  }`}>
-                    {doc.status === "ready" ? "Klar" :
-                     doc.status === "error" ? "Feil" : "Prosesserer..."}
-                  </span>
-                </td>
-                <td className="py-2">
-                  <button
-                    onClick={() => removeDocument({ id: doc._id })}
-                    className="text-red-500 hover:text-red-700 text-xs"
-                  >
-                    Slett
-                  </button>
-                </td>
+        <div className="bg-elevated rounded-card shadow-card overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/5">
+                <th className="text-left py-3 px-4 text-[9px] uppercase tracking-[1px] text-[#666666] font-sans">
+                  Filnavn
+                </th>
+                <th className="text-left py-3 px-4 text-[9px] uppercase tracking-[1px] text-[#666666] font-sans">
+                  Type
+                </th>
+                <th className="text-left py-3 px-4 text-[9px] uppercase tracking-[1px] text-[#666666] font-sans">
+                  Periode
+                </th>
+                <th className="text-left py-3 px-4 text-[9px] uppercase tracking-[1px] text-[#666666] font-sans">
+                  Status
+                </th>
+                <th className="py-3 px-4" />
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {documents.map((doc) => (
+                <tr
+                  key={doc._id}
+                  className="border-b border-white/5 last:border-0 hover:bg-white/[0.03] transition-colors duration-150"
+                >
+                  <td className="py-3 px-4 font-sans text-sm">{doc.fileName}</td>
+                  <td className="py-3 px-4">
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-accent-subtle text-accent font-mono">
+                      {doc.reportType}
+                    </span>
+                  </td>
+                  <td className="py-3 px-4 font-mono text-xs text-[#666666]">
+                    {doc.period}
+                  </td>
+                  <td className="py-3 px-4">
+                    <span className="flex items-center gap-1.5">
+                      <span
+                        className={`w-2 h-2 rounded-full ${
+                          doc.status === "ready"
+                            ? "bg-accent"
+                            : doc.status === "error"
+                            ? "bg-negative"
+                            : "bg-warning"
+                        }`}
+                      />
+                      <span className="text-xs text-[#AAAAAA]">
+                        {doc.status === "ready"
+                          ? "Klar"
+                          : doc.status === "error"
+                          ? "Feil"
+                          : "Prosesserer..."}
+                      </span>
+                    </span>
+                  </td>
+                  <td className="py-3 px-4 text-right">
+                    <button
+                      onClick={() => removeDocument({ id: doc._id })}
+                      className="text-[#666666] hover:text-negative transition-colors duration-150"
+                    >
+                      <Trash size={16} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
@@ -1806,9 +1991,11 @@ import { Id } from "@/convex/_generated/dataModel";
 
 export function OverviewTab({ companyId }: { companyId: Id<"companies"> }) {
   return (
-    <div className="text-gray-500">
-      <h2 className="text-xl font-bold text-gray-900 mb-4">Oversikt</h2>
-      <p>Last opp rapporter under Dokumenter-fanen for å se finansielle nøkkeltall.</p>
+    <div>
+      <h2 className="text-lg font-semibold mb-4">Oversikt</h2>
+      <p className="text-sm text-[#666666]">
+        Last opp rapporter under Dokumenter-fanen for å se finansielle nøkkeltall.
+      </p>
     </div>
   );
 }
@@ -1822,9 +2009,9 @@ import { Id } from "@/convex/_generated/dataModel";
 
 export function ChatTab({ companyId }: { companyId: Id<"companies"> }) {
   return (
-    <div className="text-gray-500">
-      <h2 className="text-xl font-bold text-gray-900 mb-4">Chat</h2>
-      <p>Chat-funksjonalitet kommer i neste steg.</p>
+    <div>
+      <h2 className="text-lg font-semibold mb-4">Chat</h2>
+      <p className="text-sm text-[#666666]">Chat-funksjonalitet kommer i neste steg.</p>
     </div>
   );
 }
@@ -1832,13 +2019,13 @@ export function ChatTab({ companyId }: { companyId: Id<"companies"> }) {
 
 - [ ] **Step 5: Verify in browser**
 
-Navigate to a company page — tabs should work, documents tab should show upload zone and document list.
+Expected: Dark dashboard with teal tab underlines, Phosphor icons, status dots, elevation table, skeleton loading.
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add app/selskap/ components/dashboard/
-git commit -m "feat: add company dashboard with tab navigation and documents tab"
+git commit -m "feat: add company dashboard with tabs, documents tab (dark Bloomberg theme)"
 ```
 
 ---
@@ -1861,24 +2048,25 @@ interface KpiCardProps {
   label: string;
   value: string;
   change?: { value: number; label: string };
-  color: "blue" | "green" | "yellow" | "purple";
 }
 
-const colorMap = {
-  blue: "bg-blue-50 border-blue-200",
-  green: "bg-green-50 border-green-200",
-  yellow: "bg-yellow-50 border-yellow-200",
-  purple: "bg-purple-50 border-purple-200",
-};
-
-export function KpiCard({ label, value, change, color }: KpiCardProps) {
+export function KpiCard({ label, value, change }: KpiCardProps) {
   return (
-    <div className={`rounded-lg border p-4 ${colorMap[color]}`}>
-      <div className="text-xs text-gray-500 uppercase">{label}</div>
-      <div className="text-2xl font-bold mt-1">{value}</div>
+    <div className="bg-elevated rounded-card shadow-card p-4 hover:shadow-card-hover transition-shadow duration-150">
+      <div className="text-[9px] font-sans uppercase tracking-[1px] text-[#666666]">
+        {label}
+      </div>
+      <div className="text-xl font-mono font-medium text-accent mt-1.5">
+        {value}
+      </div>
       {change && (
-        <div className={`text-sm mt-1 ${change.value >= 0 ? "text-green-600" : "text-red-600"}`}>
-          {change.value >= 0 ? "▲" : "▼"} {Math.abs(change.value).toFixed(1)}% {change.label}
+        <div
+          className={`text-[10px] font-mono mt-1.5 ${
+            change.value >= 0 ? "text-positive" : "text-negative"
+          }`}
+        >
+          {change.value >= 0 ? "▲" : "▼"} {Math.abs(change.value).toFixed(1)}%{" "}
+          {change.label}
         </div>
       )}
     </div>
@@ -1902,48 +2090,57 @@ interface RevenueChartProps {
   data: { period: string; value: number }[];
 }
 
+const GRID_STROKE = "rgba(255,255,255,0.06)";
+const TOOLTIP_STYLE = {
+  backgroundColor: "#232323",
+  border: "none",
+  borderRadius: "8px",
+  boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+  color: "#F5F5F5",
+  fontSize: "12px",
+};
+
 export function RevenueChart({ data }: RevenueChartProps) {
   const [chartType, setChartType] = useState<"bar" | "line">("bar");
 
   return (
-    <div className="border rounded-lg p-4">
+    <div className="bg-elevated rounded-card shadow-card p-5">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="font-semibold text-sm">Driftsinntekter (MNOK)</h3>
+        <h3 className="text-[9px] font-sans uppercase tracking-[1px] text-[#666666]">
+          Driftsinntekter (MNOK)
+        </h3>
         <div className="flex gap-1">
-          <button
-            onClick={() => setChartType("bar")}
-            className={`px-2 py-1 text-xs rounded ${
-              chartType === "bar" ? "bg-blue-100 text-blue-700" : "text-gray-500"
-            }`}
-          >
-            Søyle
-          </button>
-          <button
-            onClick={() => setChartType("line")}
-            className={`px-2 py-1 text-xs rounded ${
-              chartType === "line" ? "bg-blue-100 text-blue-700" : "text-gray-500"
-            }`}
-          >
-            Linje
-          </button>
+          {(["bar", "line"] as const).map((type) => (
+            <button
+              key={type}
+              onClick={() => setChartType(type)}
+              className={`px-2.5 py-1 text-[11px] rounded transition-colors duration-150 ${
+                chartType === type
+                  ? "bg-accent/15 text-accent"
+                  : "text-[#666666] hover:text-[#AAAAAA]"
+              }`}
+            >
+              {type === "bar" ? "Søyle" : "Linje"}
+            </button>
+          ))}
         </div>
       </div>
       <ResponsiveContainer width="100%" height={200}>
         {chartType === "bar" ? (
           <BarChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="period" tick={{ fontSize: 12 }} />
-            <YAxis tick={{ fontSize: 12 }} />
-            <Tooltip />
-            <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+            <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+            <XAxis dataKey="period" tick={{ fontSize: 11, fill: "#666666", fontFamily: "var(--font-mono)" }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 11, fill: "#666666", fontFamily: "var(--font-mono)" }} axisLine={false} tickLine={false} />
+            <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
+            <Bar dataKey="value" fill="#2DD4BF" radius={[2, 2, 0, 0]} animationDuration={300} animationEasing="ease-out" />
           </BarChart>
         ) : (
           <LineChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="period" tick={{ fontSize: 12 }} />
-            <YAxis tick={{ fontSize: 12 }} />
-            <Tooltip />
-            <Line type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={2} />
+            <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+            <XAxis dataKey="period" tick={{ fontSize: 11, fill: "#666666", fontFamily: "var(--font-mono)" }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 11, fill: "#666666", fontFamily: "var(--font-mono)" }} axisLine={false} tickLine={false} />
+            <Tooltip contentStyle={TOOLTIP_STYLE} />
+            <Line type="monotone" dataKey="value" stroke="#2DD4BF" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: "#2DD4BF" }} animationDuration={500} />
           </LineChart>
         )}
       </ResponsiveContainer>
@@ -1972,20 +2169,36 @@ interface MarginsChartProps {
   }[];
 }
 
+const GRID_STROKE = "rgba(255,255,255,0.06)";
+const TOOLTIP_STYLE = {
+  backgroundColor: "#232323",
+  border: "none",
+  borderRadius: "8px",
+  boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+  color: "#F5F5F5",
+  fontSize: "12px",
+};
+
 export function MarginsChart({ data }: MarginsChartProps) {
   return (
-    <div className="border rounded-lg p-4">
-      <h3 className="font-semibold text-sm mb-4">Marginer (%)</h3>
+    <div className="bg-elevated rounded-card shadow-card p-5">
+      <h3 className="text-[9px] font-sans uppercase tracking-[1px] text-[#666666] mb-4">
+        Marginer (%)
+      </h3>
       <ResponsiveContainer width="100%" height={200}>
         <LineChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="period" tick={{ fontSize: 12 }} />
-          <YAxis tick={{ fontSize: 12 }} unit="%" />
-          <Tooltip />
-          <Legend />
-          <Line type="monotone" dataKey="driftsmargin" name="Driftsmargin" stroke="#22c55e" strokeWidth={2} />
-          <Line type="monotone" dataKey="ebitda_margin" name="EBITDA" stroke="#f59e0b" strokeWidth={2} />
-          <Line type="monotone" dataKey="netto_margin" name="Netto" stroke="#8b5cf6" strokeWidth={2} />
+          <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+          <XAxis dataKey="period" tick={{ fontSize: 11, fill: "#666666", fontFamily: "var(--font-mono)" }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ fontSize: 11, fill: "#666666", fontFamily: "var(--font-mono)" }} unit="%" axisLine={false} tickLine={false} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} />
+          <Legend
+            iconType="circle"
+            iconSize={8}
+            wrapperStyle={{ fontSize: "11px", color: "#AAAAAA" }}
+          />
+          <Line type="monotone" dataKey="driftsmargin" name="Driftsmargin" stroke="#5eead4" strokeWidth={2} dot={false} animationDuration={500} />
+          <Line type="monotone" dataKey="ebitda_margin" name="EBITDA" stroke="#14b8a6" strokeWidth={1.5} dot={false} animationDuration={500} />
+          <Line type="monotone" dataKey="netto_margin" name="Netto" stroke="#1a8a7d" strokeWidth={1.5} dot={false} animationDuration={500} />
         </LineChart>
       </ResponsiveContainer>
     </div>
@@ -2009,24 +2222,42 @@ interface CashflowChartProps {
     period: string;
     operasjonell?: number;
     investering?: number;
+    finansiering?: number;
     fcf?: number;
   }[];
 }
 
+const GRID_STROKE = "rgba(255,255,255,0.06)";
+const TOOLTIP_STYLE = {
+  backgroundColor: "#232323",
+  border: "none",
+  borderRadius: "8px",
+  boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+  color: "#F5F5F5",
+  fontSize: "12px",
+};
+
 export function CashflowChart({ data }: CashflowChartProps) {
   return (
-    <div className="border rounded-lg p-4">
-      <h3 className="font-semibold text-sm mb-4">Kontantstrøm (MNOK)</h3>
+    <div className="bg-elevated rounded-card shadow-card p-5">
+      <h3 className="text-[9px] font-sans uppercase tracking-[1px] text-[#666666] mb-4">
+        Kontantstrøm (MNOK)
+      </h3>
       <ResponsiveContainer width="100%" height={200}>
         <BarChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="period" tick={{ fontSize: 12 }} />
-          <YAxis tick={{ fontSize: 12 }} />
-          <Tooltip />
-          <Legend />
-          <Bar dataKey="operasjonell" name="Operasjonell" fill="#22c55e" radius={[4, 4, 0, 0]} />
-          <Bar dataKey="investering" name="Investering" fill="#ef4444" radius={[4, 4, 0, 0]} />
-          <Bar dataKey="fcf" name="FCF" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+          <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+          <XAxis dataKey="period" tick={{ fontSize: 11, fill: "#666666", fontFamily: "var(--font-mono)" }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ fontSize: 11, fill: "#666666", fontFamily: "var(--font-mono)" }} axisLine={false} tickLine={false} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
+          <Legend
+            iconType="circle"
+            iconSize={8}
+            wrapperStyle={{ fontSize: "11px", color: "#AAAAAA" }}
+          />
+          <Bar dataKey="operasjonell" name="Operasjonell" fill="#2DD4BF" radius={[2, 2, 0, 0]} animationDuration={300} />
+          <Bar dataKey="investering" name="Investering" fill="#f87171" radius={[2, 2, 0, 0]} animationDuration={300} />
+          <Bar dataKey="finansiering" name="Finansiering" fill="#6b7280" radius={[2, 2, 0, 0]} animationDuration={300} />
+          <Bar dataKey="fcf" name="FCF" fill="#14b8a6" radius={[2, 2, 0, 0]} animationDuration={300} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -2072,29 +2303,43 @@ export function ComparisonTable({ metrics }: ComparisonTableProps) {
   const latestPeriod = periods[periods.length - 1];
 
   return (
-    <div className="border rounded-lg p-4">
-      <h3 className="font-semibold text-sm mb-4">Nøkkeltall — Sammenligning</h3>
+    <div className="bg-elevated rounded-card shadow-card p-5">
+      <h3 className="text-[9px] font-sans uppercase tracking-[1px] text-[#666666] mb-4">
+        Nøkkeltall — Sammenligning
+      </h3>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b">
-              <th className="text-left py-2 text-gray-500">Nøkkeltall</th>
+            <tr>
+              <th className="text-left py-2 pr-4 text-[9px] uppercase tracking-[1px] text-[#666666] font-sans font-normal">
+                Nøkkeltall
+              </th>
               {periods.map((p) => (
-                <th key={p} className="text-right py-2 text-gray-500">{p}</th>
+                <th
+                  key={p}
+                  className="text-right py-2 px-3 text-[9px] uppercase tracking-[1px] text-[#666666] font-mono font-normal"
+                >
+                  {p}
+                </th>
               ))}
             </tr>
           </thead>
           <tbody>
             {DISPLAY_METRICS.map((dm) => (
-              <tr key={dm.key} className="border-b">
-                <td className="py-2">{dm.label}</td>
+              <tr
+                key={dm.key}
+                className="border-t border-white/5 hover:bg-white/[0.03] transition-colors duration-150"
+              >
+                <td className="py-2.5 pr-4 font-sans text-sm text-[#AAAAAA]">
+                  {dm.label}
+                </td>
                 {periods.map((p) => {
                   const val = getValue(dm.key, p);
                   return (
                     <td
                       key={p}
-                      className={`text-right py-2 ${
-                        p === latestPeriod ? "font-bold text-blue-600" : ""
+                      className={`text-right py-2.5 px-3 font-mono text-sm ${
+                        p === latestPeriod ? "text-accent font-medium" : "text-[#F5F5F5]"
                       }`}
                     >
                       {val ?? "—"}
@@ -2113,8 +2358,6 @@ export function ComparisonTable({ metrics }: ComparisonTableProps) {
 
 - [ ] **Step 6: Wire up the overview tab with real data**
 
-Replace the placeholder `overview-tab.tsx`:
-
 ```tsx
 // components/dashboard/overview-tab.tsx
 "use client";
@@ -2132,13 +2375,27 @@ import { sortPeriods } from "@/lib/period-format";
 export function OverviewTab({ companyId }: { companyId: Id<"companies"> }) {
   const metrics = useQuery(api.financialMetrics.getByCompany, { companyId });
 
-  if (metrics === undefined) return <p className="text-gray-500">Laster...</p>;
+  if (metrics === undefined) {
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => <div key={i} className="skeleton h-24" />)}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="skeleton h-64" />
+          <div className="skeleton h-64" />
+        </div>
+      </div>
+    );
+  }
 
   if (metrics.length === 0) {
     return (
-      <div className="text-gray-500">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">Oversikt</h2>
-        <p>Last opp rapporter under Dokumenter-fanen for å se finansielle nøkkeltall.</p>
+      <div>
+        <h2 className="text-lg font-semibold mb-4">Oversikt</h2>
+        <p className="text-sm text-[#666666]">
+          Last opp rapporter under Dokumenter-fanen for å se finansielle nøkkeltall.
+        </p>
       </div>
     );
   }
@@ -2168,7 +2425,6 @@ export function OverviewTab({ companyId }: { companyId: Id<"companies"> }) {
     return m.unit === "%" ? `${m.value.toFixed(1)}%` : `${m.value.toLocaleString("nb-NO")} ${m.unit}`;
   };
 
-  // Build chart data
   const revenueData = periods.map((p) => ({
     period: p,
     value: metrics.find((m) => m.metricName === "driftsinntekter" && m.period === p)?.value ?? 0,
@@ -2185,27 +2441,27 @@ export function OverviewTab({ companyId }: { companyId: Id<"companies"> }) {
     period: p,
     operasjonell: metrics.find((m) => m.metricName === "operasjonell_kontantstrom" && m.period === p)?.value,
     investering: metrics.find((m) => m.metricName === "investeringsaktiviteter" && m.period === p)?.value,
+    finansiering: metrics.find((m) => m.metricName === "finansieringsaktiviteter" && m.period === p)?.value,
     fcf: metrics.find((m) => m.metricName === "fri_kontantstrom" && m.period === p)?.value,
   }));
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-bold">Oversikt</h2>
-
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard label="Driftsinntekter" value={formatValue("driftsinntekter")} change={calcChange("driftsinntekter")} color="green" />
-        <KpiCard label="EBITDA" value={formatValue("ebitda")} change={calcChange("ebitda")} color="blue" />
-        <KpiCard label="Fri kontantstrøm" value={formatValue("fri_kontantstrom")} change={calcChange("fri_kontantstrom")} color="yellow" />
-        <KpiCard label="Driftsmargin" value={formatValue("driftsmargin")} change={calcChange("driftsmargin")} color="purple" />
+        <KpiCard label="Driftsinntekter" value={formatValue("driftsinntekter")} change={calcChange("driftsinntekter")} />
+        <KpiCard label="EBITDA" value={formatValue("ebitda")} change={calcChange("ebitda")} />
+        <KpiCard label="Fri kontantstrøm" value={formatValue("fri_kontantstrom")} change={calcChange("fri_kontantstrom")} />
+        <KpiCard label="Driftsmargin" value={formatValue("driftsmargin")} change={calcChange("driftsmargin")} />
       </div>
 
-      {/* Charts */}
+      {/* Charts Row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <RevenueChart data={revenueData} />
         <MarginsChart data={marginsData} />
       </div>
 
+      {/* Charts Row 2 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <CashflowChart data={cashflowData} />
         <ComparisonTable metrics={metrics} />
@@ -2217,13 +2473,13 @@ export function OverviewTab({ companyId }: { companyId: Id<"companies"> }) {
 
 - [ ] **Step 7: Verify in browser**
 
-Navigate to a company with uploaded reports. KPI cards, charts, and comparison table should populate automatically.
+Expected: Dark Bloomberg-style dashboard with teal KPI values, dark chart panels with teal monochromatic palette, elevation cards, JetBrains Mono for all numbers.
 
 - [ ] **Step 8: Commit**
 
 ```bash
 git add components/dashboard/
-git commit -m "feat: add overview tab with KPI cards, charts, and comparison table"
+git commit -m "feat: add overview tab with KPIs, charts, comparison table (Bloomberg dark theme)"
 ```
 
 ---
@@ -2296,7 +2552,7 @@ ${context}`,
     ],
   });
 
-  // 6. Stream response back
+  // 7. Stream response back
   const encoder = new TextEncoder();
   let fullResponse = "";
 
@@ -2342,9 +2598,10 @@ ${context}`,
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
+import { PaperPlaneRight } from "@phosphor-icons/react";
 
 export function ChatInterface({
   companyId,
@@ -2413,26 +2670,30 @@ export function ChatInterface({
   return (
     <div className="flex flex-col h-[600px]">
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto space-y-4 mb-4">
+      <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-2">
         {messages?.map((msg) => (
           <div
             key={msg._id}
-            className={`p-3 rounded-lg ${
+            className={`p-4 rounded-card max-w-[85%] ${
               msg.role === "user"
-                ? "bg-blue-50 ml-12"
-                : "bg-gray-50 mr-12"
+                ? "ml-auto bg-accent/10"
+                : "mr-auto bg-elevated shadow-card"
             }`}
           >
-            <div className="text-xs text-gray-500 mb-1">
+            <div className="text-[9px] uppercase tracking-[1px] text-[#666666] mb-1.5 font-sans">
               {msg.role === "user" ? "Du" : "FinansAnalyse"}
             </div>
-            <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
+            <div className="text-sm whitespace-pre-wrap leading-relaxed">
+              {msg.content}
+            </div>
             {msg.sources && msg.sources.length > 0 && (
-              <div className="mt-2 text-xs text-gray-400">
-                Kilder: {msg.sources.map((s, i) => (
-                  <span key={i}>
-                    {s.pageRange ? `s. ${s.pageRange}` : `chunk`}
-                    {i < msg.sources!.length - 1 ? ", " : ""}
+              <div className="mt-3 flex gap-1.5 flex-wrap">
+                {msg.sources.map((s, i) => (
+                  <span
+                    key={i}
+                    className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-accent-subtle text-accent cursor-pointer hover:bg-accent-muted transition-colors duration-150"
+                  >
+                    {s.pageRange ? `s. ${s.pageRange}` : `kilde ${i + 1}`}
                   </span>
                 ))}
               </div>
@@ -2442,9 +2703,14 @@ export function ChatInterface({
 
         {/* Streaming message */}
         {streaming && (
-          <div className="p-3 rounded-lg bg-gray-50 mr-12">
-            <div className="text-xs text-gray-500 mb-1">FinansAnalyse</div>
-            <div className="text-sm whitespace-pre-wrap">{streaming}</div>
+          <div className="p-4 rounded-card bg-elevated shadow-card mr-auto max-w-[85%]">
+            <div className="text-[9px] uppercase tracking-[1px] text-[#666666] mb-1.5 font-sans">
+              FinansAnalyse
+            </div>
+            <div className="text-sm whitespace-pre-wrap leading-relaxed">
+              {streaming}
+              <span className="inline-block w-1.5 h-4 bg-accent ml-0.5 animate-pulse" />
+            </div>
           </div>
         )}
 
@@ -2458,15 +2724,15 @@ export function ChatInterface({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Still et spørsmål om selskapet..."
-          className="flex-1 border rounded-md px-4 py-2 text-sm"
+          className="flex-1 bg-base rounded-lg px-4 py-3 text-sm shadow-[inset_0_1px_3px_rgba(0,0,0,0.3)] placeholder:text-[#666666]"
           disabled={isLoading}
         />
         <button
           type="submit"
           disabled={isLoading || !input.trim()}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 disabled:opacity-50"
+          className="px-4 py-3 bg-accent text-base rounded-lg hover:brightness-90 transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed"
         >
-          {isLoading ? "..." : "Spør"}
+          <PaperPlaneRight size={18} weight="fill" />
         </button>
       </form>
     </div>
@@ -2474,7 +2740,7 @@ export function ChatInterface({
 }
 ```
 
-- [ ] **Step 3: Update the chat tab to create/manage sessions**
+- [ ] **Step 3: Update the chat tab**
 
 ```tsx
 // components/dashboard/chat-tab.tsx
@@ -2485,6 +2751,7 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { ChatInterface } from "../chat-interface";
 import { useState } from "react";
+import { Plus } from "@phosphor-icons/react";
 
 export function ChatTab({ companyId }: { companyId: Id<"companies"> }) {
   const sessions = useQuery(api.chatSessions.listByCompany, { companyId });
@@ -2496,18 +2763,18 @@ export function ChatTab({ companyId }: { companyId: Id<"companies"> }) {
     setActiveSessionId(id);
   };
 
-  // Auto-select first session or create one
   const activeSession = activeSessionId ?? sessions?.[0]?._id ?? null;
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold">Chat</h2>
+        <h2 className="text-lg font-semibold">Chat</h2>
         <button
           onClick={handleNewSession}
-          className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-accent text-base rounded-lg hover:brightness-90 transition-all duration-150 font-medium"
         >
-          + Ny samtale
+          <Plus size={14} weight="bold" />
+          Ny samtale
         </button>
       </div>
 
@@ -2517,10 +2784,10 @@ export function ChatTab({ companyId }: { companyId: Id<"companies"> }) {
             <button
               key={s._id}
               onClick={() => setActiveSessionId(s._id)}
-              className={`px-3 py-1 text-xs rounded-full whitespace-nowrap ${
-                (activeSession === s._id)
-                  ? "bg-blue-100 text-blue-700"
-                  : "bg-gray-100 text-gray-600"
+              className={`px-3 py-1 text-xs rounded-full whitespace-nowrap transition-colors duration-150 ${
+                activeSession === s._id
+                  ? "bg-accent/15 text-accent"
+                  : "bg-elevated text-[#666666] hover:text-[#AAAAAA]"
               }`}
             >
               {s.title || "Samtale"}
@@ -2532,11 +2799,11 @@ export function ChatTab({ companyId }: { companyId: Id<"companies"> }) {
       {activeSession ? (
         <ChatInterface companyId={companyId} sessionId={activeSession} />
       ) : (
-        <div className="text-center py-12">
-          <p className="text-gray-500">Ingen samtaler ennå</p>
+        <div className="text-center py-16">
+          <p className="text-[#666666]">Ingen samtaler ennå</p>
           <button
             onClick={handleNewSession}
-            className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm"
+            className="mt-3 px-4 py-2 bg-accent text-base rounded-lg text-sm font-medium hover:brightness-90 transition-all duration-150"
           >
             Start en samtale
           </button>
@@ -2549,13 +2816,13 @@ export function ChatTab({ companyId }: { companyId: Id<"companies"> }) {
 
 - [ ] **Step 4: Verify in browser**
 
-Test the full flow: create company → upload PDF → wait for processing → check overview tab for charts → use chat tab to ask questions.
+Expected: Dark chat with teal-tinted user messages (right-aligned), elevated AI messages (left-aligned), teal source citation pills, pulsing cursor during streaming, inset-shadow input.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add app/api/chat/ components/chat-interface.tsx components/dashboard/chat-tab.tsx
-git commit -m "feat: add streaming RAG chat with session management"
+git commit -m "feat: add streaming RAG chat with dark theme and source citations"
 ```
 
 ---
@@ -2563,26 +2830,25 @@ git commit -m "feat: add streaming RAG chat with session management"
 ## Task 11: Integration Testing & Polish
 
 **Files:**
-- Modify: `app/globals.css` (if needed for styling tweaks)
 - Modify: various components for bug fixes found during testing
 
 - [ ] **Step 1: End-to-end manual test**
 
-Run through the full flow:
 1. Start both servers: `npx convex dev` and `npm run dev`
 2. Create a company (e.g., "Equinor ASA", ticker "EQNR")
 3. Navigate to company → Dokumenter tab
 4. Upload a real Norwegian annual or quarterly report PDF
-5. Wait for processing to complete (status changes to "Klar")
-6. Switch to Oversikt tab — verify KPIs, charts, and comparison table populate
-7. Switch to Chat tab — ask "Hva var driftsinntektene?" and verify streaming response with sources
+5. Wait for processing to complete (status dot turns teal)
+6. Switch to Oversikt tab — verify KPI cards (teal values), charts (teal palette), and comparison table
+7. Switch to Chat tab — ask "Hva var driftsinntektene?" and verify streaming response with source pills
 
 - [ ] **Step 2: Fix any issues found during testing**
 
-Address bugs found in step 1. Common issues:
+Common issues:
 - opendataloader-pdf not finding Java — ensure `JAVA_HOME` is set
 - Convex type mismatches — adjust schema if needed
-- Chart rendering issues — check Recharts data format
+- Recharts SSR issues — ensure all chart components have `"use client"`
+- Font loading — verify Geist woff2 file exists in `app/fonts/`
 
 - [ ] **Step 3: Add `.superpowers` to `.gitignore`**
 
@@ -2611,14 +2877,14 @@ git commit -m "chore: polish, bug fixes, and gitignore updates"
 
 | Task | What it builds | Depends on |
 |------|---------------|------------|
-| 1 | Project scaffolding (Next.js + deps) | — |
+| 1 | Project scaffolding (Next.js + dark theme + design tokens + fonts) | — |
 | 2 | Convex schema + base functions | 1 |
-| 3 | Home page + company CRUD UI | 2 |
+| 3 | Home page + company CRUD UI (dark, elevation cards) | 2 |
 | 4 | PDF processor + chunker + period utils | 1 |
 | 5 | OpenAI embeddings + financial extractor | 4 |
 | 6 | Upload API route (full pipeline) | 2, 4, 5 |
-| 7 | Batch upload UI component | 6 |
-| 8 | Dashboard page + tabs + documents tab | 3, 7 |
-| 9 | Overview tab (KPIs + charts) | 8 |
-| 10 | Chat API + chat UI | 2, 5, 8 |
+| 7 | Batch upload UI (dark dropzone, Phosphor icons) | 6 |
+| 8 | Dashboard page + tabs + documents tab (Bloomberg dark) | 3, 7 |
+| 9 | Overview tab (teal KPIs + monochromatic charts) | 8 |
+| 10 | Chat API + chat UI (dark, streaming, source pills) | 2, 5, 8 |
 | 11 | Integration testing + polish | all |
