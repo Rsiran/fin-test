@@ -58,7 +58,8 @@ async function tryOpenDataLoader(pdfBuffer: Buffer): Promise<string | null> {
 }
 
 async function fallbackPdfParse(pdfBuffer: Buffer): Promise<string> {
-  const pdfParse = (await import("pdf-parse")).default;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const pdfParse = require("pdf-parse");
   const data = await pdfParse(pdfBuffer);
   return data.text;
 }
