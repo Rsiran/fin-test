@@ -18,8 +18,8 @@ export async function convertPdfToMarkdown(pdfBuffer: Buffer): Promise<string> {
     await execFileAsync("npx", [
       "@opendataloader/pdf",
       inputPath,
-      "--output", outputDir,
-      "--format", "markdown",
+      "-o", outputDir,
+      "-f", "markdown",
     ], {
       timeout: 120000,
       maxBuffer: 50 * 1024 * 1024,
