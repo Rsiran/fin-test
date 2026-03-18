@@ -93,7 +93,8 @@ User question → OpenAI embedding of question → Convex vector search (scoped 
 | reportType | string | "årsrapport" \| "kvartalsrapport" \| "prospekt" \| "børsmelding" \| "annet" |
 | period | string | "Q1 2025" \| "FY 2024" \| etc. |
 | status | string | "processing" \| "ready" \| "error" |
-| markdownContent | string | Full converted markdown (for re-processing) |
+| errorMessage | string? | Error details if status is "error" |
+| markdownFileId | Id<"_storage"> | Converted markdown stored in Convex file storage (avoids 1MB document size limit for large reports) |
 | createdAt | number | Timestamp |
 
 ### chunks
@@ -102,7 +103,7 @@ User question → OpenAI embedding of question → Convex vector search (scoped 
 | documentId | Id<"documents"> | Parent document |
 | companyId | Id<"companies"> | Denormalized for fast vector search scoping |
 | content | string | Chunk text |
-| embedding | float32[] | Vector embedding (1536 dims) |
+| embedding | float64[] | Vector embedding (1536 dims, Convex native format) |
 | chunkIndex | number | Order within document |
 | pageRange | string? | Source pages (e.g., "12-14") |
 
@@ -193,12 +194,43 @@ All other data operations go through the Convex client directly (real-time subsc
 
 1. **Flat `financialMetrics` table** — one row per metric per period. Makes chart queries trivial ("all driftsinntekter for company X, sorted by period").
 2. **Denormalized `companyId` on chunks** — enables fast vector search scoped to a single company without joining through documents.
-3. **Full markdown stored on documents** — allows re-chunking or re-extracting without re-processing the PDF.
-4. **opendataloader-pdf local mode** — no GPU needed, ~20 pages/sec, sufficient for Norwegian financial reports which are typically well-structured digital PDFs.
-5. **Real-time processing on upload** — user waits with progress bar rather than background job. Simpler UX and architecture.
+3. **Markdown stored in Convex file storage** — avoids 1MB document size limit; allows re-chunking or re-extracting without re-processing the PDF.
+4. **opendataloader-pdf local mode** — no GPU needed, handles well-structured digital PDFs typical of Norwegian financial reports.
+5. **Real-time processing with progress** — user waits with progress bar per file. Each file updates its `documents.status` field so the UI reflects progress via Convex subscriptions. On failure, status is set to "error" with an error message, and the user can retry individual files.
 6. **Two API routes only** — upload and chat need server-side processing (Java subprocess, streaming). Everything else goes through Convex client.
 7. **No auth initially** — ship the product first, add authentication later.
 8. **Batch upload** — users can drag-and-drop multiple PDFs at once, each processed with its own progress indicator.
+
+## Chunking Strategy
+
+- **Chunk size:** ~1000 tokens with ~200 token overlap
+- **Method:** Split on markdown headings (h1, h2, h3) first to preserve section boundaries. Within large sections, split on paragraph boundaries. Never split mid-table — tables are kept as whole chunks.
+- **Metadata per chunk:** document ID, company ID, chunk index, source page range (extracted from opendataloader-pdf's bounding box data)
+
+## Financial Data Extraction
+
+GPT-4o receives the full markdown of each report with a structured extraction prompt that:
+1. Identifies the reporting period and canonicalizes it (see Period Format below)
+2. Extracts all available metrics from the predefined list, returning JSON
+3. Reports confidence level per metric (high/medium/low)
+
+**Validation:** Extracted values are sanity-checked before storage — reject negative revenue, margins outside -100% to 100%, etc. Low-confidence extractions are flagged for user review on the dashboard.
+
+## Period Format
+
+All periods are canonicalized to a standard format for consistent sorting and comparison:
+- Quarterly: `YYYY-QN` (e.g., `2025-Q1`, `2025-Q3`)
+- Annual: `YYYY-FY` (e.g., `2024-FY`)
+- Half-year: `YYYY-H1`, `YYYY-H2`
+
+GPT-4o maps Norwegian terms ("første kvartal 2025", "årsrapport 2024", "halvårsrapport") to this canonical format during extraction.
+
+## Error Handling
+
+- **PDF conversion failure:** Document status set to "error" with message. User can retry or delete.
+- **OpenAI rate limits:** Exponential backoff with 3 retries. If batch upload hits limits, files are queued and processed sequentially.
+- **Extraction failure:** If GPT-4o returns invalid JSON or fails, RAG path still completes (chat works), but dashboard metrics are marked as "extraction failed" — user can trigger re-extraction.
+- **Partial upload:** Each file in a batch is independent. One failure doesn't block others.
 
 ## External Dependencies
 
