@@ -21,6 +21,7 @@ export async function convertPdfToMarkdown(pdfBuffer: Buffer): Promise<string> {
         inputPath,
         "-o", outputDir,
         "-f", "markdown",
+        "--content-safety-off", "all",
       ], {
         timeout: 300000,
         maxBuffer: 50 * 1024 * 1024,
