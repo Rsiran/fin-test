@@ -15,15 +15,34 @@ export async function convertPdfToMarkdown(pdfBuffer: Buffer): Promise<string> {
     await writeFile(inputPath, pdfBuffer);
     await mkdir(outputDir, { recursive: true });
 
-    await execFileAsync("npx", [
-      "@opendataloader/pdf",
-      inputPath,
-      "-o", outputDir,
-      "-f", "markdown",
-    ], {
-      timeout: 120000,
-      maxBuffer: 50 * 1024 * 1024,
-    });
+    // opendataloader-pdf may crash on image extraction (RasterFormatException)
+    // even when outputting plain markdown. The text is usually written before
+    // the crash, so we check for output regardless of exit code.
+    try {
+      await execFileAsync("npx", [
+        "@opendataloader/pdf",
+        inputPath,
+        "-o", outputDir,
+        "-f", "markdown",
+        "-q",
+      ], {
+        timeout: 300000, // 5 min for large PDFs
+        maxBuffer: 50 * 1024 * 1024,
+      });
+    } catch (execError: any) {
+      // Check if markdown was generated despite the error
+      const files = await readdir(outputDir).catch(() => []);
+      const mdFile = files.find((f: string) => f.endsWith(".md"));
+      if (mdFile) {
+        const content = await readFile(join(outputDir, mdFile), "utf-8");
+        if (content.length > 0) {
+          console.warn("opendataloader-pdf exited with error but markdown was generated, using partial output");
+          return content;
+        }
+      }
+      // No usable output — re-throw
+      throw execError;
+    }
 
     const files = await readdir(outputDir);
     const mdFile = files.find((f) => f.endsWith(".md"));
