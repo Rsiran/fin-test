@@ -74,13 +74,22 @@ Bruk disse metrikknavnene der tilgjengelig:
 
 Returner KUN gyldig JSON, ingen annen tekst.`;
 
+// ~4 chars per token, keep under 25K tokens for GPT-4o input
+const MAX_CHARS = 100000;
+
 export async function extractFinancialData(markdown: string): Promise<ExtractionResult> {
   const { openai } = await import("./openai");
+
+  // Truncate long documents — financial data is typically in the first half
+  const truncated = markdown.length > MAX_CHARS
+    ? markdown.slice(0, MAX_CHARS) + "\n\n[... dokument avkortet ...]"
+    : markdown;
+
   const response = await openai.chat.completions.create({
     model: "gpt-4o",
     messages: [
       { role: "system", content: EXTRACTION_PROMPT },
-      { role: "user", content: markdown },
+      { role: "user", content: truncated },
     ],
     response_format: { type: "json_object" },
     temperature: 0,
