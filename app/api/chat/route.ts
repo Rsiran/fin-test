@@ -146,6 +146,8 @@ Regler:
 - Svar ALLTID på norsk
 - Bruk KONKRETE tall — du har nøkkeltallene, bruk dem aktivt for sammenligninger og analyse
 - Sett inn kildehenvisninger [1], [2] osv. INLINE når du refererer til spesifikke utdrag fra rapportene
+- VIKTIG: Hver påstand skal ha kildehenvisning til den RIKTIGE kilden — ikke bruk samme kilde for alt. Ulike fakta kommer fra ulike kilder — finn riktig kilde for hver påstand
+- Hvis en påstand ikke kan knyttes til en spesifikk kilde, IKKE legg til en kildehenvisning — la den stå uten
 - For nøkkeltall trenger du ikke kildehenvisning — de kommer direkte fra rapportenes finansregnskap
 - Formater tall med norsk format (komma som desimalskilletegn)
 - Beregn endringer, vekstrater og marginer når det er relevant
@@ -167,7 +169,7 @@ ${numberedContext}`,
   const sourceMeta = selectedChunks.map((c: any, i: number) => ({
     index: i + 1,
     chunkId: c._id,
-    content: c.content.substring(0, 500),
+    content: c.content.substring(0, 1500),
     pageRange: c.pageRange,
   }));
 
@@ -189,7 +191,7 @@ ${numberedContext}`,
         content: fullResponse,
         sources: selectedChunks.slice(0, 10).map((c: any) => ({
           chunkId: c._id,
-          content: c.content.substring(0, 500),
+          content: c.content.substring(0, 1500),
           pageRange: c.pageRange,
         })),
       });
