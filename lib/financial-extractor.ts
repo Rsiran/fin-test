@@ -49,7 +49,77 @@ export function validateMetrics(metrics: ExtractedMetric[]): ValidationResult {
   return { valid, rejected };
 }
 
-const EXTRACTION_PROMPT = `Du er en ekspert på norsk finansanalyse. Analyser følgende rapport og ekstraher alle tilgjengelige finansielle nøkkeltall.
+// Keywords that indicate financial statement sections (Norwegian + English)
+const FINANCIAL_KEYWORDS = [
+  // Norwegian
+  "resultatregnskap", "balanse", "kontantstrøm", "kontantstrømoppstilling",
+  "driftsinntekter", "driftsresultat", "ebitda", "årsresultat",
+  "sum eiendeler", "egenkapital", "gjeld", "totalkapital",
+  "resultat per aksje", "driftsmargin", "netto margin",
+  "operasjonelle aktiviteter", "investeringsaktiviteter", "finansieringsaktiviteter",
+  "nøkkeltall", "hovedtall", "konsernregnskap", "finansielle hovedtall",
+  // English
+  "income statement", "balance sheet", "cash flow", "statement of profit",
+  "statement of financial position", "statement of cash flows",
+  "revenue", "operating profit", "total assets", "total equity",
+  "earnings per share", "consolidated statement", "financial highlights",
+  "key figures", "profit and loss", "comprehensive income",
+];
+
+/**
+ * Extract only the financially relevant sections from a large document.
+ * Splits on headings, scores each section by keyword density, returns
+ * the top sections up to a token budget.
+ */
+export function extractFinancialSections(markdown: string, maxChars = 80000): string {
+  // If already small enough, return as-is
+  if (markdown.length <= maxChars) return markdown;
+
+  // Split into sections on headings
+  const sections = markdown.split(/(?=^#{1,4}\s)/m).filter((s) => s.trim().length > 0);
+
+  // Score each section by financial keyword matches
+  const scored = sections.map((section) => {
+    const lower = section.toLowerCase();
+    let score = 0;
+    for (const kw of FINANCIAL_KEYWORDS) {
+      // Count occurrences, weight heading matches higher
+      const headingMatch = lower.slice(0, 200).includes(kw);
+      const bodyMatches = (lower.match(new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g")) || []).length;
+      score += headingMatch ? 10 : 0;
+      score += bodyMatches;
+    }
+    // Boost sections with numbers and tables (likely financial data)
+    const numberDensity = (section.match(/\d[\d\s,.]+\d/g) || []).length;
+    const hasTable = section.includes("|") && section.includes("---");
+    score += Math.min(numberDensity, 20); // cap at 20
+    score += hasTable ? 5 : 0;
+
+    return { section, score };
+  });
+
+  // Sort by score descending, take top sections up to budget
+  scored.sort((a, b) => b.score - a.score);
+
+  let totalChars = 0;
+  const selected: { section: string; score: number }[] = [];
+
+  for (const item of scored) {
+    if (totalChars + item.section.length > maxChars) continue;
+    selected.push(item);
+    totalChars += item.section.length;
+  }
+
+  // Re-sort selected sections by their original document order
+  const originalOrder = sections.map((s) => s);
+  selected.sort(
+    (a, b) => originalOrder.indexOf(a.section) - originalOrder.indexOf(b.section)
+  );
+
+  return selected.map((s) => s.section).join("\n\n");
+}
+
+const EXTRACTION_PROMPT = `Du er en ekspert på norsk finansanalyse. Analyser følgende utdrag fra en finansrapport og ekstraher alle tilgjengelige finansielle nøkkeltall.
 
 Returner et JSON-objekt med denne strukturen:
 {
@@ -74,22 +144,17 @@ Bruk disse metrikknavnene der tilgjengelig:
 
 Returner KUN gyldig JSON, ingen annen tekst.`;
 
-// ~4 chars per token, keep under 25K tokens for GPT-4o input
-const MAX_CHARS = 100000;
-
 export async function extractFinancialData(markdown: string): Promise<ExtractionResult> {
   const { openai } = await import("./openai");
 
-  // Truncate long documents — financial data is typically in the first half
-  const truncated = markdown.length > MAX_CHARS
-    ? markdown.slice(0, MAX_CHARS) + "\n\n[... dokument avkortet ...]"
-    : markdown;
+  // Extract only financially relevant sections instead of sending entire document
+  const financialContent = extractFinancialSections(markdown);
 
   const response = await openai.chat.completions.create({
     model: "gpt-4o",
     messages: [
       { role: "system", content: EXTRACTION_PROMPT },
-      { role: "user", content: truncated },
+      { role: "user", content: financialContent },
     ],
     response_format: { type: "json_object" },
     temperature: 0,
