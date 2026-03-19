@@ -121,15 +121,31 @@ export function extractFinancialSections(markdown: string, maxChars = 80000): st
 
 const EXTRACTION_PROMPT = `Du er en ekspert på norsk finansanalyse. Analyser følgende utdrag fra en finansrapport og ekstraher alle tilgjengelige finansielle nøkkeltall.
 
+VIKTIG — NORMALISERING AV ENHETER:
+Ulike rapporter bruker forskjellige enheter (kr, tusen kr, TNOK, mKR, MNOK, mill., millioner, EUR'000, etc.).
+Du MÅ normalisere ALLE pengeverdier til MNOK (millioner norske kroner) for konsistens på tvers av rapporter.
+
+Konverteringsregler:
+- Tall i hele kroner (f.eks. "3 921 399 kr") → del på 1 000 000 → 3,92 MNOK
+- Tall i tusen/TNOK/1000 kr (f.eks. "3 500 TNOK") → del på 1 000 → 3,5 MNOK
+- Tall i millioner/MNOK/mKR/mill. (f.eks. "3 500 mKR") → bruk direkte → 3 500 MNOK
+- Tall i EUR (f.eks. "248 738 EUR'000") → konverter til NOK med kurs ~11,5, deretter til MNOK → 2 860,5 MNOK
+- Tall i USD → konverter til NOK med kurs ~10,5, deretter til MNOK
+- Prosenter og forholdstall → behold som de er
+
+Sjekk ALLTID hva enheten i rapporten er (se tabelloverskrifter, fotnoter, "Beløp i...", "Amounts in...").
+
 Returner et JSON-objekt med denne strukturen:
 {
   "period": "<rapporteringsperiode, f.eks. 'Q1 2025' eller 'Årsrapport 2024'>",
   "reportType": "<årsrapport|kvartalsrapport|prospekt|børsmelding|annet>",
+  "currency": "<opprinnelig valuta i rapporten, f.eks. NOK, EUR, USD>",
+  "originalUnit": "<opprinnelig enhet, f.eks. kr, TNOK, MNOK, EUR'000>",
   "metrics": [
     {
       "metricName": "<norsk navn>",
-      "value": <numerisk verdi>,
-      "unit": "<NOK|MNOK|BNOK|%|x>",
+      "value": <numerisk verdi i MNOK for pengeverdier, eller original verdi for prosenter/forholdstall>,
+      "unit": "<MNOK|%|x>",
       "category": "<resultat|balanse|kontantstrøm|nøkkeltall>",
       "confidence": "<high|medium|low>"
     }
