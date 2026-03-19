@@ -6,21 +6,66 @@ import { generateEmbedding } from "@/lib/embeddings";
 
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
+/**
+ * Format financial metrics into a readable summary for the chat context.
+ * Groups metrics by period for easy comparison.
+ */
+function formatMetricsSummary(metrics: any[]): string {
+  if (metrics.length === 0) return "";
+
+  // Group by period
+  const byPeriod: Record<string, any[]> = {};
+  for (const m of metrics) {
+    if (!byPeriod[m.period]) byPeriod[m.period] = [];
+    byPeriod[m.period].push(m);
+  }
+
+  const periods = Object.keys(byPeriod).sort();
+  let summary = "## Ekstraherte nøkkeltall fra opplastede rapporter\n\n";
+
+  for (const period of periods) {
+    summary += `### ${period}\n`;
+    // Group by category within period
+    const byCategory: Record<string, any[]> = {};
+    for (const m of byPeriod[period]) {
+      if (!byCategory[m.category]) byCategory[m.category] = [];
+      byCategory[m.category].push(m);
+    }
+    for (const [category, items] of Object.entries(byCategory)) {
+      summary += `**${category}:**\n`;
+      for (const item of items) {
+        const formatted = item.unit === "%"
+          ? `${item.value}%`
+          : `${item.value.toLocaleString("nb-NO")} ${item.unit}`;
+        summary += `- ${item.metricName}: ${formatted}\n`;
+      }
+    }
+    summary += "\n";
+  }
+
+  return summary;
+}
+
 export async function POST(req: NextRequest) {
   const { message, companyId, sessionId } = await req.json();
 
-  // 1. Generate embedding for the question
-  const questionEmbedding = await generateEmbedding(message);
+  // 1. Fetch structured financial metrics AND do vector search in parallel
+  const [questionEmbedding, allMetrics] = await Promise.all([
+    generateEmbedding(message),
+    convex.query(api.financialMetrics.getByCompany, { companyId }),
+  ]);
 
-  // 2. Vector search for relevant chunks
+  // 2. Vector search for relevant document chunks
   const relevantChunks = await convex.action(api.chunks.search, {
     companyId,
     embedding: questionEmbedding,
     limit: 16,
   });
 
-  // 3. Build numbered context — each source gets [1], [2], etc.
-  const MAX_CONTEXT_CHARS = 80000;
+  // 3. Build context: structured metrics + numbered RAG chunks
+  const metricsSummary = formatMetricsSummary(allMetrics);
+
+  const MAX_CONTEXT_CHARS = 60000;
   let contextChars = 0;
   const selectedChunks: any[] = [];
   for (const chunk of relevantChunks) {
@@ -47,25 +92,29 @@ export async function POST(req: NextRequest) {
     content: message,
   });
 
-  // 6. Stream GPT-4o response with inline citation instructions
+  // 6. Stream GPT-4o response with both structured data and RAG sources
   const stream = await openai.chat.completions.create({
     model: "gpt-4o",
     stream: true,
     messages: [
       {
         role: "system",
-        content: `Du er en ekspert norsk finansanalytiker. Du har tilgang til nummererte utdrag fra selskapets finansrapporter.
+        content: `Du er en ekspert norsk finansanalytiker. Du har tilgang til to typer data:
+
+1. NØKKELTALL: Strukturerte finansielle nøkkeltall ekstrahert fra rapportene (tall du kan bruke direkte til sammenligninger)
+2. KILDER: Nummererte utdrag fra rapportteksten (for kvalitativ kontekst og detaljer)
 
 Regler:
 - Svar ALLTID på norsk
-- Bruk KONKRETE tall og data fra kildene
-- Sett inn kildehenvisninger som [1], [2] osv. INLINE i teksten etter påstander som er basert på en kilde
-- Eksempel: "Driftsinntektene var 500 MNOK [1], en økning på 12% fra året før [3]."
-- Bruk SÅ MANGE kildehenvisninger som nødvendig — hver påstand med tall bør ha en referanse
-- Formater tall med norsk format
-- Aldri si "informasjonen er ikke tilgjengelig" hvis tallene finnes i kildene — sjekk nøye
+- Bruk KONKRETE tall — du har nøkkeltallene, bruk dem aktivt for sammenligninger og analyse
+- Sett inn kildehenvisninger [1], [2] osv. INLINE når du refererer til spesifikke utdrag fra rapportene
+- For nøkkeltall trenger du ikke kildehenvisning — de kommer direkte fra rapportenes finansregnskap
+- Formater tall med norsk format (komma som desimalskilletegn)
+- Beregn endringer, vekstrater og marginer når det er relevant
+- Aldri si "informasjonen er ikke tilgjengelig" hvis tallene finnes — sjekk BÅDE nøkkeltall og kilder
 
-Kilder:
+${metricsSummary}
+Kilder fra rapporter:
 ${numberedContext}`,
       },
       ...conversationHistory,
@@ -77,7 +126,6 @@ ${numberedContext}`,
   const encoder = new TextEncoder();
   let fullResponse = "";
 
-  // Send source metadata first so the client can map [N] references
   const sourceMeta = selectedChunks.map((c: any, i: number) => ({
     index: i + 1,
     chunkId: c._id,
@@ -87,7 +135,6 @@ ${numberedContext}`,
 
   const readableStream = new ReadableStream({
     async start(controller) {
-      // Send sources as first event so client has them before text arrives
       controller.enqueue(
         encoder.encode(`data: ${JSON.stringify({ sources: sourceMeta })}\n\n`)
       );
@@ -98,7 +145,6 @@ ${numberedContext}`,
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`));
       }
 
-      // Save assistant message with sources
       await convex.mutation(api.chatMessages.create, {
         sessionId,
         role: "assistant",
