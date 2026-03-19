@@ -21,11 +21,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const results = [];
+    // Phase 1: Upload ALL files to Convex storage and create document records immediately.
+    // This makes all documents visible in the UI right away with "Prosesserer..." status.
+    const fileEntries: { file: File; docId: any; storageId: any }[] = [];
 
     for (const file of files) {
       try {
-        // 1. Upload PDF to Convex storage
         const uploadUrl = await convex.mutation(api.documents.generateUploadUrl);
         const uploadResponse = await fetch(uploadUrl, {
           method: "POST",
@@ -34,7 +35,6 @@ export async function POST(req: NextRequest) {
         });
         const { storageId } = await uploadResponse.json();
 
-        // 2. Create document record (status: processing)
         const docId = await convex.mutation(api.documents.create, {
           companyId: companyId as any,
           fileName: file.name,
@@ -43,11 +43,24 @@ export async function POST(req: NextRequest) {
           period: "unknown",
         });
 
-        // 3. Convert PDF to Markdown
+        fileEntries.push({ file, docId, storageId });
+      } catch (error) {
+        // If even the upload fails, skip this file
+        console.error(`Failed to upload ${file.name}:`, error);
+      }
+    }
+
+    // Phase 2: Process each file (PDF conversion, chunking, extraction).
+    // Documents already exist in Convex with "processing" status.
+    const results = [];
+
+    for (const { file, docId } of fileEntries) {
+      try {
+        // 1. Convert PDF to Markdown
         const pdfBuffer = Buffer.from(await file.arrayBuffer());
         const markdown = await convertPdfToMarkdown(pdfBuffer);
 
-        // 4. Store markdown in Convex file storage
+        // 2. Store markdown in Convex file storage
         const mdUploadUrl = await convex.mutation(api.documents.generateUploadUrl);
         const mdUploadResponse = await fetch(mdUploadUrl, {
           method: "POST",
@@ -56,16 +69,16 @@ export async function POST(req: NextRequest) {
         });
         const { storageId: mdStorageId } = await mdUploadResponse.json();
 
-        // 5. Run both paths in parallel
+        // 3. Run extraction and chunking in parallel
         const [extractionResult, chunks] = await Promise.all([
           extractFinancialData(markdown),
           Promise.resolve(chunkMarkdown(markdown)),
         ]);
 
-        // 6. Generate embeddings for all chunks
+        // 4. Generate embeddings for all chunks
         const embeddings = await generateEmbeddings(chunks.map((c) => c.content));
 
-        // 7. Store chunks with embeddings in Convex
+        // 5. Store chunks with embeddings
         for (let i = 0; i < chunks.length; i++) {
           await convex.mutation(api.chunks.insert, {
             documentId: docId,
@@ -76,7 +89,7 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        // 8. Store financial metrics
+        // 6. Store financial metrics
         if (extractionResult.metrics.length > 0) {
           await convex.mutation(api.financialMetrics.insertBatch, {
             metrics: extractionResult.metrics.map((m) => ({
@@ -91,7 +104,7 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        // 9. Update document status to ready + write back extracted period/type
+        // 7. Update document status to ready
         await convex.mutation(api.documents.updateStatus, {
           id: docId,
           status: "ready",
@@ -103,6 +116,14 @@ export async function POST(req: NextRequest) {
         results.push({ fileName: file.name, status: "ready", docId });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        // Mark the document as errored (it already exists in Convex)
+        try {
+          await convex.mutation(api.documents.updateStatus, {
+            id: docId,
+            status: "error",
+            errorMessage,
+          });
+        } catch {}
         results.push({ fileName: file.name, status: "error", error: errorMessage });
       }
     }
