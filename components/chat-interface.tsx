@@ -1,10 +1,91 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
-import { PaperPlaneRight } from "@phosphor-icons/react";
+import { PaperPlaneRight, X } from "@phosphor-icons/react";
+
+interface SourceMeta {
+  index: number;
+  chunkId: string;
+  content: string;
+  pageRange?: string;
+}
+
+/**
+ * Parse message text and render [N] citations as clickable inline references.
+ */
+function CitedText({
+  text,
+  sources,
+  onCiteClick,
+}: {
+  text: string;
+  sources: SourceMeta[];
+  onCiteClick: (source: SourceMeta) => void;
+}) {
+  // Split text on [N] patterns, preserving the references
+  const parts = text.split(/(\[\d+\])/g);
+
+  return (
+    <>
+      {parts.map((part, i) => {
+        const match = part.match(/^\[(\d+)\]$/);
+        if (match) {
+          const idx = parseInt(match[1], 10);
+          const source = sources.find((s) => s.index === idx);
+          if (source) {
+            return (
+              <button
+                key={i}
+                onClick={() => onCiteClick(source)}
+                className="inline-flex items-center justify-center w-4 h-4 text-[9px] font-mono bg-accent/20 text-accent rounded-full hover:bg-accent/30 transition-colors duration-150 mx-0.5 align-super cursor-pointer"
+                title={`Kilde ${idx}`}
+              >
+                {idx}
+              </button>
+            );
+          }
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </>
+  );
+}
+
+/**
+ * Source detail panel — shows the full source text when a citation is clicked.
+ */
+function SourcePanel({
+  source,
+  onClose,
+}: {
+  source: SourceMeta;
+  onClose: () => void;
+}) {
+  return (
+    <div className="mt-3 bg-base rounded-lg p-3 border border-white/5">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[9px] font-sans uppercase tracking-[1px] text-accent">
+          Kilde {source.index}
+          {source.pageRange && (
+            <span className="text-[#666666] ml-2">s. {source.pageRange}</span>
+          )}
+        </span>
+        <button
+          onClick={onClose}
+          className="text-[#666666] hover:text-[#AAAAAA] transition-colors duration-150"
+        >
+          <X size={14} />
+        </button>
+      </div>
+      <p className="text-xs text-[#AAAAAA] leading-relaxed whitespace-pre-wrap font-mono">
+        {source.content}
+      </p>
+    </div>
+  );
+}
 
 export function ChatInterface({
   companyId,
@@ -17,11 +98,28 @@ export function ChatInterface({
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [sources, setSources] = useState<SourceMeta[]>([]);
+  const [activeSource, setActiveSource] = useState<SourceMeta | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streaming]);
+  }, [messages, streaming, activeSource]);
+
+  const handleCiteClick = useCallback((source: SourceMeta) => {
+    setActiveSource((prev) => (prev?.index === source.index ? null : source));
+  }, []);
+
+  // Build sources from saved message data
+  const getSourcesForMessage = useCallback((msg: any): SourceMeta[] => {
+    if (!msg.sources) return [];
+    return msg.sources.map((s: any, i: number) => ({
+      index: i + 1,
+      chunkId: s.chunkId,
+      content: s.content,
+      pageRange: s.pageRange,
+    }));
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,6 +129,8 @@ export function ChatInterface({
     setInput("");
     setIsLoading(true);
     setStreaming("");
+    setSources([]);
+    setActiveSource(null);
 
     try {
       const response = await fetch("/api/chat", {
@@ -60,70 +160,108 @@ export function ChatInterface({
           if (data === "[DONE]") break;
           try {
             const parsed = JSON.parse(data);
-            setStreaming((prev) => prev + parsed.content);
+            // First event contains source metadata
+            if (parsed.sources) {
+              setSources(parsed.sources);
+            }
+            // Subsequent events contain streamed text
+            if (parsed.content) {
+              setStreaming((prev) => prev + parsed.content);
+            }
           } catch {}
         }
       }
     } finally {
       setStreaming("");
+      setSources([]);
       setIsLoading(false);
+      setActiveSource(null);
     }
   };
 
   return (
     <div className="flex flex-col h-[600px]">
+      {/* Messages */}
       <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-2">
-        {messages?.map((msg) => (
-          <div
-            key={msg._id}
-            className={`p-4 rounded-card max-w-[85%] ${
-              msg.role === "user"
-                ? "ml-auto bg-accent/10"
-                : "mr-auto bg-elevated shadow-card"
-            }`}
-          >
-            <div className="text-[9px] uppercase tracking-[1px] text-[#666666] mb-1.5 font-sans">
-              {msg.role === "user" ? "Du" : "FinansAnalyse"}
+        {messages?.map((msg) => {
+          const msgSources = getSourcesForMessage(msg);
+          return (
+            <div key={msg._id}>
+              <div
+                className={`p-4 rounded-card max-w-[85%] ${
+                  msg.role === "user"
+                    ? "ml-auto bg-accent/10"
+                    : "mr-auto bg-elevated shadow-card"
+                }`}
+              >
+                <div className="text-[9px] uppercase tracking-[1px] text-[#666666] mb-1.5 font-sans">
+                  {msg.role === "user" ? "Du" : "FinansAnalyse"}
+                </div>
+                <div className="text-sm leading-relaxed">
+                  {msg.role === "assistant" && msgSources.length > 0 ? (
+                    <CitedText
+                      text={msg.content}
+                      sources={msgSources}
+                      onCiteClick={handleCiteClick}
+                    />
+                  ) : (
+                    <span className="whitespace-pre-wrap">{msg.content}</span>
+                  )}
+                </div>
+              </div>
+              {/* Source panel renders below the message */}
+              {activeSource && msg.role === "assistant" && msgSources.some((s) => s.index === activeSource.index) && (
+                <div className="max-w-[85%] mr-auto">
+                  <SourcePanel source={activeSource} onClose={() => setActiveSource(null)} />
+                </div>
+              )}
             </div>
-            <div className="text-sm whitespace-pre-wrap leading-relaxed">
-              {msg.content}
+          );
+        })}
+
+        {/* Streaming message */}
+        {streaming && (
+          <div>
+            <div className="p-4 rounded-card bg-elevated shadow-card mr-auto max-w-[85%]">
+              <div className="text-[9px] uppercase tracking-[1px] text-[#666666] mb-1.5 font-sans">
+                FinansAnalyse
+              </div>
+              <div className="text-sm leading-relaxed">
+                {sources.length > 0 ? (
+                  <>
+                    <CitedText
+                      text={streaming}
+                      sources={sources}
+                      onCiteClick={handleCiteClick}
+                    />
+                    <span className="inline-block w-1.5 h-4 bg-accent ml-0.5 animate-pulse" />
+                  </>
+                ) : (
+                  <>
+                    <span className="whitespace-pre-wrap">{streaming}</span>
+                    <span className="inline-block w-1.5 h-4 bg-accent ml-0.5 animate-pulse" />
+                  </>
+                )}
+              </div>
             </div>
-            {msg.sources && msg.sources.length > 0 && (
-              <div className="mt-3 flex gap-1.5 flex-wrap">
-                {msg.sources.map((s, i) => (
-                  <span
-                    key={i}
-                    className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-accent-subtle text-accent cursor-pointer hover:bg-accent-muted transition-colors duration-150"
-                  >
-                    {s.pageRange ? `s. ${s.pageRange}` : `kilde ${i + 1}`}
-                  </span>
-                ))}
+            {activeSource && (
+              <div className="max-w-[85%] mr-auto">
+                <SourcePanel source={activeSource} onClose={() => setActiveSource(null)} />
               </div>
             )}
-          </div>
-        ))}
-
-        {streaming && (
-          <div className="p-4 rounded-card bg-elevated shadow-card mr-auto max-w-[85%]">
-            <div className="text-[9px] uppercase tracking-[1px] text-[#666666] mb-1.5 font-sans">
-              FinansAnalyse
-            </div>
-            <div className="text-sm whitespace-pre-wrap leading-relaxed">
-              {streaming}
-              <span className="inline-block w-1.5 h-4 bg-accent ml-0.5 animate-pulse" />
-            </div>
           </div>
         )}
 
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Input */}
       <form onSubmit={handleSubmit} className="flex gap-2">
         <input
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Still et sporsmal om selskapet..."
+          placeholder="Still et spørsmål om selskapet..."
           className="flex-1 bg-base rounded-lg px-4 py-3 text-sm shadow-[inset_0_1px_3px_rgba(0,0,0,0.3)] placeholder:text-[#666666]"
           disabled={isLoading}
         />
