@@ -12,15 +12,24 @@ export async function POST(req: NextRequest) {
   // 1. Generate embedding for the question
   const questionEmbedding = await generateEmbedding(message);
 
-  // 2. Vector search for relevant chunks
+  // 2. Vector search for relevant chunks (top 16 for large reports)
   const relevantChunks = await convex.action(api.chunks.search, {
     companyId,
     embedding: questionEmbedding,
-    limit: 8,
+    limit: 16,
   });
 
-  // 3. Build context from chunks
-  const context = relevantChunks
+  // 3. Build context from chunks, cap at ~20K tokens to stay within limits
+  const MAX_CONTEXT_CHARS = 80000;
+  let contextChars = 0;
+  const selectedChunks: any[] = [];
+  for (const chunk of relevantChunks) {
+    if (contextChars + chunk.content.length > MAX_CONTEXT_CHARS) break;
+    selectedChunks.push(chunk);
+    contextChars += chunk.content.length;
+  }
+
+  const context = selectedChunks
     .map((chunk: any) => chunk.content)
     .join("\n\n---\n\n");
 
@@ -45,9 +54,16 @@ export async function POST(req: NextRequest) {
     messages: [
       {
         role: "system",
-        content: `Du er en norsk finansanalytiker. Svar på spørsmål basert på følgende kontekst fra selskapets rapporter. Svar alltid på norsk. Vær presis og referer til spesifikke tall fra rapportene.
+        content: `Du er en ekspert norsk finansanalytiker. Du har tilgang til utdrag fra selskapets finansrapporter nedenfor.
 
-Kontekst:
+Regler:
+- Svar ALLTID på norsk
+- Bruk KONKRETE tall og data fra konteksten — aldri si "informasjonen er ikke tilgjengelig" hvis tallene finnes i konteksten
+- Formater tall med norsk format (komma som desimalskilletegn, punktum som tusenskilletegn)
+- Referer til spesifikke seksjoner eller noter når relevant
+- Hvis konteksten ikke inneholder svaret, si det tydelig — men sjekk nøye først
+
+Kontekst fra rapporter:
 ${context}`,
       },
       ...conversationHistory,
