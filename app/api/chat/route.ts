@@ -46,16 +46,61 @@ function formatMetricsSummary(metrics: any[]): string {
   return summary;
 }
 
+/**
+ * Build a standalone search query from conversation context.
+ * Resolves pronouns like "denne", "det", "de" by including
+ * key terms from recent messages.
+ */
+async function buildSearchQuery(
+  message: string,
+  conversationHistory: { role: string; content: string }[]
+): Promise<string> {
+  // If no history, use the message as-is
+  if (conversationHistory.length === 0) return message;
+
+  // Take the last 2 exchanges for context
+  const recentMessages = conversationHistory.slice(-4);
+  const context = recentMessages.map((m) => m.content).join(" ");
+
+  // Use GPT-4o-mini (fast, cheap) to rewrite as a standalone query
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      {
+        role: "system",
+        content: `Omskriv brukerens spørsmål til et selvstendig søkespørsmål som kan brukes for å søke i finansrapporter. Inkluder spesifikke tall, årstall, selskap og temaer fra samtalehistorikken slik at spørsmålet gir mening uten kontekst. Returner KUN det omskrevne spørsmålet, ingen forklaring.`,
+      },
+      {
+        role: "user",
+        content: `Samtalehistorikk:\n${context}\n\nNytt spørsmål: ${message}`,
+      },
+    ],
+    temperature: 0,
+    max_tokens: 200,
+  });
+
+  return response.choices[0].message.content?.trim() || message;
+}
+
 export async function POST(req: NextRequest) {
   const { message, companyId, sessionId } = await req.json();
 
-  // 1. Fetch structured financial metrics AND do vector search in parallel
-  const [questionEmbedding, allMetrics] = await Promise.all([
-    generateEmbedding(message),
+  // 1. Fetch conversation history, metrics, and rewrite query in parallel
+  const [existingMessages, allMetrics] = await Promise.all([
+    convex.query(api.chatMessages.listBySession, { sessionId }),
     convex.query(api.financialMetrics.getByCompany, { companyId }),
   ]);
 
-  // 2. Vector search for relevant document chunks
+  const conversationHistory = existingMessages.map((m: any) => ({
+    role: m.role as "user" | "assistant",
+    content: m.content,
+  }));
+
+  // 2. Rewrite the question as a standalone search query using conversation context
+  const searchQuery = await buildSearchQuery(message, conversationHistory);
+  const questionEmbedding = await generateEmbedding(searchQuery);
+
+  // 3. Vector search for relevant document chunks
   const relevantChunks = await convex.action(api.chunks.search, {
     companyId,
     embedding: questionEmbedding,
@@ -78,14 +123,7 @@ export async function POST(req: NextRequest) {
     .map((chunk: any, i: number) => `[Kilde ${i + 1}]\n${chunk.content}`)
     .join("\n\n---\n\n");
 
-  // 4. Fetch conversation history
-  const existingMessages = await convex.query(api.chatMessages.listBySession, { sessionId });
-  const conversationHistory = existingMessages.map((m: any) => ({
-    role: m.role as "user" | "assistant",
-    content: m.content,
-  }));
-
-  // 5. Save user message
+  // 4. Save user message
   await convex.mutation(api.chatMessages.create, {
     sessionId,
     role: "user",
