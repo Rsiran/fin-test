@@ -28,13 +28,13 @@ function CitedText({
   sources: SourceMeta[];
   onCiteClick: (source: SourceMeta) => void;
 }) {
-  // Split text into segments: alternating between markdown text and citation markers
-  const segments = text.split(/(\[\d+\])/g);
+  // Split text into segments: catch both [N] and [Kilde N] patterns
+  const segments = text.split(/(\[(?:Kilde\s*)?\d+\])/g);
 
   return (
     <div className="cited-text">
       {segments.map((segment, i) => {
-        const citeMatch = segment.match(/^\[(\d+)\]$/);
+        const citeMatch = segment.match(/^\[(?:Kilde\s*)?(\d+)\]$/);
         if (citeMatch) {
           const idx = parseInt(citeMatch[1], 10);
           const source = sources.find((s) => s.index === idx);
