@@ -122,30 +122,33 @@ export function extractFinancialSections(markdown: string, maxChars = 80000): st
 const EXTRACTION_PROMPT = `Du er en ekspert på norsk finansanalyse. Analyser følgende utdrag fra en finansrapport og ekstraher alle tilgjengelige finansielle nøkkeltall.
 
 VIKTIG — NORMALISERING AV ENHETER:
-Ulike rapporter bruker forskjellige enheter (kr, tusen kr, TNOK, mKR, MNOK, mill., millioner, EUR'000, etc.).
-Du MÅ normalisere ALLE pengeverdier til MNOK (millioner norske kroner) for konsistens på tvers av rapporter.
+Ulike rapporter fra samme selskap kan bruke forskjellige skalaer (hele kroner, tusen, millioner, etc.).
+Du MÅ normalisere alle pengeverdier til MILLIONER av selskapets rapporteringsvaluta.
 
-Konverteringsregler:
-- Tall i hele kroner (f.eks. "3 921 399 kr") → del på 1 000 000 → 3,92 MNOK
-- Tall i tusen/TNOK/1000 kr (f.eks. "3 500 TNOK") → del på 1 000 → 3,5 MNOK
-- Tall i millioner/MNOK/mKR/mill. (f.eks. "3 500 mKR") → bruk direkte → 3 500 MNOK
-- Tall i EUR (f.eks. "248 738 EUR'000") → konverter til NOK med kurs ~11,5, deretter til MNOK → 2 860,5 MNOK
-- Tall i USD → konverter til NOK med kurs ~10,5, deretter til MNOK
-- Prosenter og forholdstall → behold som de er
+Steg 1: Finn selskapets rapporteringsvaluta (NOK, EUR, USD, GBP, SEK, DKK, etc.)
+  - Se etter "Beløp i...", "Amounts in...", valutasymboler, eller tabelloverskrifter
+  - IKKE konverter mellom valutaer — behold selskapets egen valuta
 
-Sjekk ALLTID hva enheten i rapporten er (se tabelloverskrifter, fotnoter, "Beløp i...", "Amounts in...").
+Steg 2: Normaliser alle pengeverdier til millioner av den valutaen:
+  - Hele kroner/currency (f.eks. "3 921 399") → del på 1 000 000 → 3,92
+  - Tusen/TNOK/T-prefix/'000 (f.eks. "3 500 TNOK" eller "248 738 EUR'000") → del på 1 000 → 3,5 / 248,7
+  - Millioner/MNOK/MEUR/mill./mKR (f.eks. "3 500 mKR") → bruk direkte → 3 500
+  - Milliarder/BNOK/mrd. → gang med 1 000
+  - Prosenter og forholdstall → behold som de er
+
+Steg 3: Bruk riktig enhetslabel: MNOK, MEUR, MUSD, MGBP, MSEK, MDKK, etc.
 
 Returner et JSON-objekt med denne strukturen:
 {
   "period": "<rapporteringsperiode, f.eks. 'Q1 2025' eller 'Årsrapport 2024'>",
   "reportType": "<årsrapport|kvartalsrapport|prospekt|børsmelding|annet>",
-  "currency": "<opprinnelig valuta i rapporten, f.eks. NOK, EUR, USD>",
-  "originalUnit": "<opprinnelig enhet, f.eks. kr, TNOK, MNOK, EUR'000>",
+  "currency": "<selskapets rapporteringsvaluta, f.eks. NOK, EUR, USD>",
+  "originalUnit": "<opprinnelig enhet i rapporten, f.eks. kr, TNOK, MNOK, EUR'000>",
   "metrics": [
     {
       "metricName": "<norsk navn>",
-      "value": <numerisk verdi i MNOK for pengeverdier, eller original verdi for prosenter/forholdstall>,
-      "unit": "<MNOK|%|x>",
+      "value": <numerisk verdi i millioner av rapporteringsvaluta for pengeverdier, eller original verdi for prosenter/forholdstall>,
+      "unit": "<MNOK|MEUR|MUSD|MSEK|MDKK|MGBP|%|x>",
       "category": "<resultat|balanse|kontantstrøm|nøkkeltall>",
       "confidence": "<high|medium|low>"
     }
