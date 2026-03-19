@@ -145,10 +145,8 @@ export async function POST(req: NextRequest) {
 Regler:
 - Svar ALLTID på norsk
 - Bruk KONKRETE tall — du har nøkkeltallene, bruk dem aktivt for sammenligninger og analyse
-- Sett inn kildehenvisninger [1], [2] osv. INLINE når du refererer til spesifikke utdrag fra rapportene
-- VIKTIG: Hver påstand skal ha kildehenvisning til den RIKTIGE kilden — ikke bruk samme kilde for alt. Ulike fakta kommer fra ulike kilder — finn riktig kilde for hver påstand
-- Hvis en påstand ikke kan knyttes til en spesifikk kilde, IKKE legg til en kildehenvisning — la den stå uten
-- For nøkkeltall trenger du ikke kildehenvisning — de kommer direkte fra rapportenes finansregnskap
+- Strukturer svaret tydelig med nummererte lister og **fet skrift** for overskrifter når du forklarer flere faktorer eller punkter
+- Sett inn kildehenvisninger [1], [2] osv. INLINE når du bruker informasjon fra en kilde. Bruk ulike kildenummer for ulike fakta — ikke gjenta samme kilde for alt
 - Formater tall med norsk format (komma som desimalskilletegn)
 - Beregn endringer, vekstrater og marginer når det er relevant
 - Aldri si "informasjonen er ikke tilgjengelig" hvis tallene finnes — sjekk BÅDE nøkkeltall og kilder
