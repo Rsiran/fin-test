@@ -37,10 +37,12 @@ export function UploadDropzone({ companyId }: { companyId: Id<"companies"> }) {
       });
       const data = await response.json();
 
+      // Show errors only — successful uploads appear in the documents table
+      const errors = data.results.filter((r: any) => r.status === "error");
       setResults(
-        data.results.map((r: any) => ({
+        errors.map((r: any) => ({
           fileName: r.fileName,
-          status: r.status,
+          status: r.status as UploadResult["status"],
           error: r.error,
         }))
       );
