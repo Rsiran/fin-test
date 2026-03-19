@@ -15,33 +15,9 @@ interface SourceMeta {
 }
 
 /**
- * Render a citation button for [N] references.
- */
-function CiteButton({
-  idx,
-  onCiteClick,
-  sources,
-}: {
-  idx: number;
-  onCiteClick: (source: SourceMeta) => void;
-  sources: SourceMeta[];
-}) {
-  const source = sources.find((s) => s.index === idx);
-  if (!source) return <span>[{idx}]</span>;
-  return (
-    <button
-      onClick={() => onCiteClick(source)}
-      className="inline-flex items-center justify-center w-4 h-4 text-[9px] font-mono bg-accent/20 text-accent rounded-full hover:bg-accent/30 transition-colors duration-150 mx-0.5 align-super cursor-pointer"
-      title={`Kilde ${idx}`}
-    >
-      {idx}
-    </button>
-  );
-}
-
-/**
  * Render markdown text with [N] citations as clickable inline references.
- * First replaces [N] with placeholders, renders markdown, then swaps placeholders for buttons.
+ * Strategy: split text on [N] patterns first, render markdown segments separately,
+ * insert citation buttons between them. Avoids fragile React children manipulation.
  */
 function CitedText({
   text,
@@ -52,52 +28,53 @@ function CitedText({
   sources: SourceMeta[];
   onCiteClick: (source: SourceMeta) => void;
 }) {
-  // Replace [N] citations with unique placeholders that survive markdown rendering
-  const CITE_PLACEHOLDER = "%%CITE_";
-  const processed = text.replace(/\[(\d+)\]/g, (_, n) => `${CITE_PLACEHOLDER}${n}%%`);
+  // Split text into segments: alternating between markdown text and citation markers
+  const segments = text.split(/(\[\d+\])/g);
 
   return (
-    <ReactMarkdown
-      components={{
-        // Style markdown elements for the dark theme
-        p: ({ children }) => <p className="mb-2 last:mb-0">{processCitations(children)}</p>,
-        strong: ({ children }) => <strong className="font-semibold text-[#F5F5F5]">{children}</strong>,
-        ol: ({ children }) => <ol className="list-decimal list-outside ml-4 mb-2 space-y-1">{children}</ol>,
-        ul: ({ children }) => <ul className="list-disc list-outside ml-4 mb-2 space-y-1">{children}</ul>,
-        li: ({ children }) => <li className="text-sm">{processCitations(children)}</li>,
-        h3: ({ children }) => <h3 className="font-semibold text-base mt-3 mb-1">{children}</h3>,
-        h4: ({ children }) => <h4 className="font-semibold text-sm mt-2 mb-1">{children}</h4>,
-        code: ({ children }) => <code className="font-mono text-accent bg-accent/10 px-1 rounded text-xs">{children}</code>,
-      }}
-    >
-      {processed}
-    </ReactMarkdown>
-  );
-
-  // Recursively process React children to replace citation placeholders with buttons
-  function processCitations(children: React.ReactNode): React.ReactNode {
-    if (!children) return children;
-
-    if (typeof children === "string") {
-      const parts = children.split(/(%%CITE_\d+%%)/g);
-      if (parts.length === 1) return children;
-      return parts.map((part, i) => {
-        const match = part.match(/^%%CITE_(\d+)%%$/);
-        if (match) {
-          return <CiteButton key={i} idx={parseInt(match[1], 10)} onCiteClick={onCiteClick} sources={sources} />;
+    <div className="cited-text">
+      {segments.map((segment, i) => {
+        const citeMatch = segment.match(/^\[(\d+)\]$/);
+        if (citeMatch) {
+          const idx = parseInt(citeMatch[1], 10);
+          const source = sources.find((s) => s.index === idx);
+          if (source) {
+            return (
+              <button
+                key={i}
+                onClick={() => onCiteClick(source)}
+                className="inline-flex items-center justify-center min-w-[18px] h-[18px] text-[9px] font-mono bg-accent/20 text-accent rounded-full hover:bg-accent/30 transition-colors duration-150 mx-0.5 align-super cursor-pointer"
+                title={`Kilde ${idx}`}
+              >
+                {idx}
+              </button>
+            );
+          }
+          return <span key={i}>[{idx}]</span>;
         }
-        return <span key={i}>{part}</span>;
-      });
-    }
 
-    if (Array.isArray(children)) {
-      return children.map((child, i) =>
-        typeof child === "string" ? processCitations(child) : child
-      );
-    }
-
-    return children;
-  }
+        // Render markdown text segments
+        if (!segment.trim()) return null;
+        return (
+          <ReactMarkdown
+            key={i}
+            components={{
+              p: ({ children }) => <span className="inline">{children} </span>,
+              strong: ({ children }) => <strong className="font-semibold text-[#F5F5F5]">{children}</strong>,
+              ol: ({ children }) => <ol className="list-decimal list-outside ml-4 mb-2 space-y-1">{children}</ol>,
+              ul: ({ children }) => <ul className="list-disc list-outside ml-4 mb-2 space-y-1">{children}</ul>,
+              li: ({ children }) => <li className="text-sm">{children}</li>,
+              h3: ({ children }) => <h3 className="font-semibold text-base mt-3 mb-1">{children}</h3>,
+              h4: ({ children }) => <h4 className="font-semibold text-sm mt-2 mb-1">{children}</h4>,
+              code: ({ children }) => <code className="font-mono text-accent bg-accent/10 px-1 rounded text-xs">{children}</code>,
+            }}
+          >
+            {segment}
+          </ReactMarkdown>
+        );
+      })}
+    </div>
+  );
 }
 
 /**
