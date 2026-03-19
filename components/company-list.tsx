@@ -36,9 +36,9 @@ export function CompanyList() {
           href={`/selskap/${company._id}`}
           className="block p-5 bg-elevated rounded-card shadow-card hover:shadow-card-hover transition-shadow duration-150"
         >
-          <h3 className="text-base font-semibold font-sans text-[#F5F5F5]">{company.name}</h3>
+          <h3 className="text-base font-semibold font-sans !text-white">{company.name}</h3>
           {company.ticker && (
-            <span className="text-[11px] font-mono text-[#666666]">
+            <span className="text-[11px] font-mono !text-[#AAAAAA]">
               {company.ticker}
             </span>
           )}

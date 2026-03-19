@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Id } from "@/convex/_generated/dataModel";
 import { DocumentsTab } from "./documents-tab";
 import { OverviewTab } from "./overview-tab";
@@ -16,7 +17,11 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 
 export function DashboardTabs({ companyId }: { companyId: Id<"companies"> }) {
-  const [activeTab, setActiveTab] = useState<TabId>("oversikt");
+  const searchParams = useSearchParams();
+  const initialTab = (searchParams.get("tab") as TabId) || "oversikt";
+  const [activeTab, setActiveTab] = useState<TabId>(
+    TABS.some((t) => t.id === initialTab) ? initialTab : "oversikt"
+  );
 
   return (
     <div>

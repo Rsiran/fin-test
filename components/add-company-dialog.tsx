@@ -3,6 +3,7 @@
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { X } from "@phosphor-icons/react";
 
 export function AddCompanyDialog({
@@ -13,6 +14,7 @@ export function AddCompanyDialog({
   onClose: () => void;
 }) {
   const createCompany = useMutation(api.companies.create);
+  const router = useRouter();
   const [name, setName] = useState("");
   const [ticker, setTicker] = useState("");
 
@@ -21,13 +23,14 @@ export function AddCompanyDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    await createCompany({
+    const companyId = await createCompany({
       name: name.trim(),
       ticker: ticker.trim() || undefined,
     });
     setName("");
     setTicker("");
     onClose();
+    router.push(`/selskap/${companyId}?tab=dokumenter`);
   };
 
   return (
