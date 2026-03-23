@@ -18,7 +18,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends default-jre-hea
 WORKDIR /app
 
 ENV NODE_ENV=production
-ENV PORT=3000
 
 # Copy standalone output
 COPY --from=builder /app/.next/standalone ./
