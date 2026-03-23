@@ -10,6 +10,8 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@auth/core": "^0.37.0",
+    "@convex-dev/auth": "^0.0.91",
     "@opendataloader/pdf": "^2.0.2",
     "@phosphor-icons/react": "^2.1.10",
     "convex": "^1.33.1",
