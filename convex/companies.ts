@@ -134,11 +134,7 @@ export const removeWithData = mutation({
       await ctx.db.delete(metric._id);
     }
 
-    // Delete documents and their storage files
-    const documents = await ctx.db
-      .query("documents")
-      .withIndex("by_company", (q) => q.eq("companyId", args.id))
-      .collect();
+    // Delete documents and their storage files (reuse query from ownership check)
     for (const doc of documents) {
       await ctx.storage.delete(doc.fileId);
       if (doc.markdownFileId) {
