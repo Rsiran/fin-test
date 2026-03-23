@@ -4,19 +4,9 @@ import { tmpdir } from "os";
 import { join } from "path";
 
 /**
- * Convert a PDF buffer to markdown text.
- * Uses opendataloader-pdf JS API with image extraction disabled.
- * Falls back to pdf-parse (plain text) if opendataloader fails.
+ * Convert a PDF buffer to markdown text using opendataloader-pdf.
  */
 export async function convertPdfToMarkdown(pdfBuffer: Buffer): Promise<string> {
-  const result = await tryOpenDataLoader(pdfBuffer);
-  if (result) return result;
-
-  console.warn("opendataloader-pdf failed, falling back to pdf-parse");
-  return await fallbackPdfParse(pdfBuffer);
-}
-
-async function tryOpenDataLoader(pdfBuffer: Buffer): Promise<string | null> {
   const tempDir = await mkdtemp(join(tmpdir(), "finansanalyse-"));
   const inputPath = join(tempDir, "input.pdf");
   const outputDir = join(tempDir, "output");
@@ -31,24 +21,15 @@ async function tryOpenDataLoader(pdfBuffer: Buffer): Promise<string | null> {
       quiet: true,
     });
 
-    // Read the generated markdown file
     const files = await readdir(outputDir);
     const mdFile = files.find((f) => f.endsWith(".md"));
-    if (!mdFile) return null;
+    if (!mdFile) throw new Error("opendataloader produced no markdown output");
 
     const content = await readFile(join(outputDir, mdFile), "utf-8");
-    return content.length > 0 ? content : null;
-  } catch (error) {
-    console.warn("opendataloader-pdf error:", error instanceof Error ? error.message : error);
-    return null;
+    if (content.length === 0) throw new Error("opendataloader produced empty markdown");
+
+    return content;
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
-}
-
-async function fallbackPdfParse(pdfBuffer: Buffer): Promise<string> {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const pdfParse = require("pdf-parse");
-  const data = await pdfParse(pdfBuffer);
-  return data.text;
 }

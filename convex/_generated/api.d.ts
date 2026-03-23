@@ -16,6 +16,7 @@ import type * as companies from "../companies.js";
 import type * as documents from "../documents.js";
 import type * as financialMetrics from "../financialMetrics.js";
 import type * as http from "../http.js";
+import type * as users from "../users.js";
 import type * as watchlist from "../watchlist.js";
 
 import type {
@@ -33,6 +34,7 @@ declare const fullApi: ApiFromModules<{
   documents: typeof documents;
   financialMetrics: typeof financialMetrics;
   http: typeof http;
+  users: typeof users;
   watchlist: typeof watchlist;
 }>;
 
