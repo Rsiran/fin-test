@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { getAuthUserId } from "@convex-dev/auth/server";
 
 export const insertBatch = mutation({
   args: {
@@ -14,6 +15,20 @@ export const insertBatch = mutation({
     })),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Ikke autentisert");
+
+    // Verify user owns every referenced document and companyIds match
+    for (const metric of args.metrics) {
+      const doc = await ctx.db.get(metric.documentId);
+      if (!doc || doc.uploadedBy !== userId) {
+        throw new Error("Ingen tilgang til dette dokumentet");
+      }
+      if (doc.companyId !== metric.companyId) {
+        throw new Error("companyId samsvarer ikke med dokumentet");
+      }
+    }
+
     for (const metric of args.metrics) {
       await ctx.db.insert("financialMetrics", {
         ...metric,
@@ -26,6 +41,8 @@ export const insertBatch = mutation({
 export const getByCompany = query({
   args: { companyId: v.id("companies") },
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
     return await ctx.db
       .query("financialMetrics")
       .withIndex("by_company", (q) => q.eq("companyId", args.companyId))
@@ -39,6 +56,8 @@ export const getByCompanyAndMetric = query({
     metricName: v.string(),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
     return await ctx.db
       .query("financialMetrics")
       .withIndex("by_company_metric", (q) =>

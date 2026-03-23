@@ -10,7 +10,8 @@ import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
 
 /**
  * Process documents that have already been uploaded to Convex storage.
- * Expects JSON body: { documents: [{ docId, companyId }] }
+ * Expects JSON body: { documents: [{ docId }] }
+ * companyId is derived from the document record — never trusted from the client.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
     convex.setAuth(token);
 
     const { documents } = await req.json() as {
-      documents: { docId: string; companyId: string }[];
+      documents: { docId: string }[];
     };
 
     if (!documents || documents.length === 0) {
@@ -34,15 +35,17 @@ export async function POST(req: NextRequest) {
 
     const results = [];
 
-    for (const { docId, companyId } of documents) {
+    for (const { docId } of documents) {
       try {
-        // 1. Fetch document metadata and storage URL from Convex
-        const doc = await convex.query(api.documents.get, {
+        // 1. Fetch document (owner-only, includes storage URL)
+        const doc = await convex.query(api.documents.getWithFileUrl, {
           id: docId as Id<"documents">,
         });
         if (!doc || !doc.fileUrl) {
-          throw new Error("Document or file URL not found");
+          throw new Error("Dokument ikke funnet eller ingen tilgang");
         }
+
+        const companyId = doc.companyId;
 
         // 2. Download the PDF from Convex storage
         const pdfResponse = await fetch(doc.fileUrl);
@@ -73,7 +76,7 @@ export async function POST(req: NextRequest) {
         for (let i = 0; i < chunks.length; i++) {
           await convex.mutation(api.chunks.insert, {
             documentId: docId as Id<"documents">,
-            companyId: companyId as Id<"companies">,
+            companyId,
             content: chunks[i].content,
             embedding: embeddings[i],
             chunkIndex: chunks[i].chunkIndex,
@@ -85,7 +88,7 @@ export async function POST(req: NextRequest) {
           await convex.mutation(api.financialMetrics.insertBatch, {
             metrics: extractionResult.metrics.map((m) => ({
               documentId: docId as Id<"documents">,
-              companyId: companyId as Id<"companies">,
+              companyId,
               period: extractionResult.period,
               category: m.category,
               metricName: m.metricName,

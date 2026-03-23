@@ -93,6 +93,29 @@ export const removeWithData = mutation({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Ikke autentisert");
 
+    // Only allow deletion if user has this company on their watchlist
+    const watchlistEntry = await ctx.db
+      .query("watchlist")
+      .withIndex("by_user_company", (q) =>
+        q.eq("userId", userId).eq("companyId", args.id)
+      )
+      .unique();
+    if (!watchlistEntry) {
+      throw new Error("Du har ikke tilgang til å slette dette selskapet");
+    }
+
+    // Prevent deletion if other users have documents for this company
+    const documents = await ctx.db
+      .query("documents")
+      .withIndex("by_company", (q) => q.eq("companyId", args.id))
+      .collect();
+    const hasOtherUsersDocuments = documents.some(
+      (doc) => doc.uploadedBy && doc.uploadedBy !== userId
+    );
+    if (hasOtherUsersDocuments) {
+      throw new Error("Andre brukere har dokumenter knyttet til dette selskapet");
+    }
+
     // Delete chunks
     const chunks = await ctx.db
       .query("chunks")

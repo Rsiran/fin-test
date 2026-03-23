@@ -29,7 +29,7 @@ export function UploadDropzone({ companyId }: { companyId: Id<"companies"> }) {
     setResults(pdfFiles.map((f) => ({ fileName: f.name, status: "uploading" })));
 
     // Phase 1: Upload all PDFs directly to Convex storage and create document records
-    const uploaded: { docId: Id<"documents">; companyId: Id<"companies">; fileName: string }[] = [];
+    const uploaded: { docId: Id<"documents">; fileName: string }[] = [];
 
     for (const file of pdfFiles) {
       try {
@@ -49,7 +49,7 @@ export function UploadDropzone({ companyId }: { companyId: Id<"companies"> }) {
           period: "unknown",
         });
 
-        uploaded.push({ docId, companyId, fileName: file.name });
+        uploaded.push({ docId, fileName: file.name });
       } catch {
         setResults((prev) =>
           prev.map((r) =>
@@ -72,7 +72,7 @@ export function UploadDropzone({ companyId }: { companyId: Id<"companies"> }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          documents: uploaded.map((u) => ({ docId: u.docId, companyId: u.companyId })),
+          documents: uploaded.map((u) => ({ docId: u.docId })),
         }),
       });
       const data = await response.json();

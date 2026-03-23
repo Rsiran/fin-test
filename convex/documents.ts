@@ -110,8 +110,19 @@ export const get = query({
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return null;
+    return await ctx.db.get(args.id);
+  },
+});
+
+/** Owner-only query that includes the storage download URL. */
+export const getWithFileUrl = query({
+  args: { id: v.id("documents") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
     const doc = await ctx.db.get(args.id);
     if (!doc) return null;
+    if (doc.uploadedBy !== userId) return null;
     const fileUrl = await ctx.storage.getUrl(doc.fileId);
     return { ...doc, fileUrl };
   },
