@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { CloudArrowUp, CheckCircle, XCircle, CircleNotch } from "@phosphor-icons/react";
 
@@ -14,6 +16,8 @@ export function UploadDropzone({ companyId }: { companyId: Id<"companies"> }) {
   const [results, setResults] = useState<UploadResult[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const generateUploadUrl = useMutation(api.documents.generateUploadUrl);
+  const createDocument = useMutation(api.documents.create);
 
   const handleFiles = useCallback(async (files: FileList | File[]) => {
     const pdfFiles = Array.from(files).filter(
@@ -24,36 +28,75 @@ export function UploadDropzone({ companyId }: { companyId: Id<"companies"> }) {
     setIsUploading(true);
     setResults(pdfFiles.map((f) => ({ fileName: f.name, status: "uploading" })));
 
-    const formData = new FormData();
-    formData.append("companyId", companyId);
+    // Phase 1: Upload all PDFs directly to Convex storage and create document records
+    const uploaded: { docId: Id<"documents">; companyId: Id<"companies">; fileName: string }[] = [];
+
     for (const file of pdfFiles) {
-      formData.append("files", file);
+      try {
+        const uploadUrl = await generateUploadUrl();
+        const uploadResponse = await fetch(uploadUrl, {
+          method: "POST",
+          headers: { "Content-Type": file.type },
+          body: file,
+        });
+        const { storageId } = await uploadResponse.json();
+
+        const docId = await createDocument({
+          companyId,
+          fileName: file.name,
+          fileId: storageId,
+          reportType: "annet",
+          period: "unknown",
+        });
+
+        uploaded.push({ docId, companyId, fileName: file.name });
+      } catch {
+        setResults((prev) =>
+          prev.map((r) =>
+            r.fileName === file.name
+              ? { ...r, status: "error", error: "Opplasting feilet" }
+              : r
+          )
+        );
+      }
     }
 
+    if (uploaded.length === 0) {
+      setIsUploading(false);
+      return;
+    }
+
+    // Phase 2: Trigger server-side processing with just document IDs (tiny payload)
     try {
       const response = await fetch("/api/upload", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          documents: uploaded.map((u) => ({ docId: u.docId, companyId: u.companyId })),
+        }),
       });
       const data = await response.json();
 
       setResults(
-        data.results.map((r: { fileName: string; status: UploadResult["status"]; error?: string }) => ({
-          fileName: r.fileName,
-          status: r.status,
-          error: r.error,
-        }))
+        uploaded.map((u) => {
+          const result = data.results?.find((r: { docId: string }) => r.docId === u.docId);
+          return {
+            fileName: u.fileName,
+            status: result?.status ?? "error",
+            error: result?.error,
+          };
+        })
       );
     } catch {
-      setResults(pdfFiles.map((f) => ({
-        fileName: f.name,
+      setResults(uploaded.map((u) => ({
+        fileName: u.fileName,
         status: "error",
-        error: "Opplasting feilet",
+        error: "Prosessering feilet",
       })));
     } finally {
       setIsUploading(false);
     }
-  }, [companyId]);
+  }, [companyId, generateUploadUrl, createDocument]);
 
   return (
     <div className="space-y-4">

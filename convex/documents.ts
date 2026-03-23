@@ -105,6 +105,18 @@ export const remove = mutation({
   },
 });
 
+export const get = query({
+  args: { id: v.id("documents") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
+    const doc = await ctx.db.get(args.id);
+    if (!doc) return null;
+    const fileUrl = await ctx.storage.getUrl(doc.fileId);
+    return { ...doc, fileUrl };
+  },
+});
+
 export const generateUploadUrl = mutation({
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);

@@ -8,6 +8,10 @@ import { generateEmbeddings } from "@/lib/embeddings";
 import { extractFinancialData } from "@/lib/financial-extractor";
 import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
 
+/**
+ * Process documents that have already been uploaded to Convex storage.
+ * Expects JSON body: { documents: [{ docId, companyId }] }
+ */
 export async function POST(req: NextRequest) {
   try {
     const token = await convexAuthNextjsToken();
@@ -17,57 +21,37 @@ export async function POST(req: NextRequest) {
     const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
     convex.setAuth(token);
 
-    const formData = await req.formData();
-    const companyId = formData.get("companyId") as string;
-    const files = formData.getAll("files") as File[];
+    const { documents } = await req.json() as {
+      documents: { docId: string; companyId: string }[];
+    };
 
-    if (!companyId || files.length === 0) {
+    if (!documents || documents.length === 0) {
       return NextResponse.json(
-        { error: "companyId and files are required" },
+        { error: "documents array is required" },
         { status: 400 }
       );
     }
 
-    // Phase 1: Upload ALL files to Convex storage and create document records immediately.
-    // This makes all documents visible in the UI right away with "Prosesserer..." status.
-    const fileEntries: { file: File; docId: Id<"documents">; storageId: Id<"_storage"> }[] = [];
-
-    for (const file of files) {
-      try {
-        const uploadUrl = await convex.mutation(api.documents.generateUploadUrl);
-        const uploadResponse = await fetch(uploadUrl, {
-          method: "POST",
-          headers: { "Content-Type": file.type },
-          body: file,
-        });
-        const { storageId } = await uploadResponse.json();
-
-        const docId = await convex.mutation(api.documents.create, {
-          companyId: companyId as Id<"companies">,
-          fileName: file.name,
-          fileId: storageId,
-          reportType: "annet",
-          period: "unknown",
-        });
-
-        fileEntries.push({ file, docId, storageId });
-      } catch (error) {
-        // If even the upload fails, skip this file
-        console.error(`Failed to upload ${file.name}:`, error);
-      }
-    }
-
-    // Phase 2: Process each file (PDF conversion, chunking, extraction).
-    // Documents already exist in Convex with "processing" status.
     const results = [];
 
-    for (const { file, docId } of fileEntries) {
+    for (const { docId, companyId } of documents) {
       try {
-        // 1. Convert PDF to Markdown
-        const pdfBuffer = Buffer.from(await file.arrayBuffer());
+        // 1. Fetch document metadata and storage URL from Convex
+        const doc = await convex.query(api.documents.get, {
+          id: docId as Id<"documents">,
+        });
+        if (!doc || !doc.fileUrl) {
+          throw new Error("Document or file URL not found");
+        }
+
+        // 2. Download the PDF from Convex storage
+        const pdfResponse = await fetch(doc.fileUrl);
+        const pdfBuffer = Buffer.from(await pdfResponse.arrayBuffer());
+
+        // 3. Convert PDF to Markdown
         const markdown = await convertPdfToMarkdown(pdfBuffer);
 
-        // 2. Store markdown in Convex file storage
+        // 4. Store markdown in Convex file storage
         const mdUploadUrl = await convex.mutation(api.documents.generateUploadUrl);
         const mdUploadResponse = await fetch(mdUploadUrl, {
           method: "POST",
@@ -76,19 +60,19 @@ export async function POST(req: NextRequest) {
         });
         const { storageId: mdStorageId } = await mdUploadResponse.json();
 
-        // 3. Run extraction and chunking in parallel
+        // 5. Run extraction and chunking in parallel
         const [extractionResult, chunks] = await Promise.all([
           extractFinancialData(markdown),
           Promise.resolve(chunkMarkdown(markdown)),
         ]);
 
-        // 4. Generate embeddings for all chunks
+        // 6. Generate embeddings for all chunks
         const embeddings = await generateEmbeddings(chunks.map((c) => c.content));
 
-        // 5. Store chunks with embeddings
+        // 7. Store chunks with embeddings
         for (let i = 0; i < chunks.length; i++) {
           await convex.mutation(api.chunks.insert, {
-            documentId: docId,
+            documentId: docId as Id<"documents">,
             companyId: companyId as Id<"companies">,
             content: chunks[i].content,
             embedding: embeddings[i],
@@ -96,11 +80,11 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        // 6. Store financial metrics
+        // 8. Store financial metrics
         if (extractionResult.metrics.length > 0) {
           await convex.mutation(api.financialMetrics.insertBatch, {
             metrics: extractionResult.metrics.map((m) => ({
-              documentId: docId,
+              documentId: docId as Id<"documents">,
               companyId: companyId as Id<"companies">,
               period: extractionResult.period,
               category: m.category,
@@ -111,34 +95,33 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        // 7. Update document status to ready
+        // 9. Update document status to ready
         await convex.mutation(api.documents.updateStatus, {
-          id: docId,
+          id: docId as Id<"documents">,
           status: "ready",
           markdownFileId: mdStorageId,
           period: extractionResult.period,
           reportType: extractionResult.reportType ?? "annet",
         });
 
-        results.push({ fileName: file.name, status: "ready", docId });
+        results.push({ docId, status: "ready" });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
-        // Mark the document as errored (it already exists in Convex)
         try {
           await convex.mutation(api.documents.updateStatus, {
-            id: docId,
+            id: docId as Id<"documents">,
             status: "error",
             errorMessage,
           });
         } catch {}
-        results.push({ fileName: file.name, status: "error", error: errorMessage });
+        results.push({ docId, status: "error", error: errorMessage });
       }
     }
 
     return NextResponse.json({ results });
   } catch {
     return NextResponse.json(
-      { error: "Upload failed" },
+      { error: "Processing failed" },
       { status: 500 }
     );
   }
