@@ -3,8 +3,7 @@ import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
 import { openai } from "@/lib/openai";
 import { generateEmbedding } from "@/lib/embeddings";
-
-const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
 
 /**
  * Format financial metrics into a readable summary for the chat context.
@@ -83,6 +82,17 @@ async function buildSearchQuery(
 }
 
 export async function POST(req: NextRequest) {
+  const token = await convexAuthNextjsToken();
+  if (!token) {
+    return new Response(JSON.stringify({ error: "Ikke autentisert" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+  convex.setAuth(token);
+
   const { message, companyId, sessionId } = await req.json();
 
   // 1. Fetch conversation history, metrics, and rewrite query in parallel
