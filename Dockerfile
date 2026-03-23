@@ -25,8 +25,9 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 
-# opendataloader-pdf needs its JAR files from node_modules
-COPY --from=builder /app/node_modules/@opendataloader ./node_modules/@opendataloader
+# Limit Java heap to prevent OOM kills in constrained containers
+# _JAVA_OPTIONS is read automatically by the JVM
+ENV _JAVA_OPTIONS="-Xmx256m"
 
 EXPOSE 3000
 CMD ["node", "server.js"]
