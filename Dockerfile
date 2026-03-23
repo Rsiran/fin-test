@@ -4,7 +4,7 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci
 
-# Stage 2: Build the application
+# Stage 2: Build the application (cache-bust: v2)
 FROM node:20-slim AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
