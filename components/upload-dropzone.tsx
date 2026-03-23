@@ -38,7 +38,7 @@ export function UploadDropzone({ companyId }: { companyId: Id<"companies"> }) {
       const data = await response.json();
 
       setResults(
-        data.results.map((r: any) => ({
+        data.results.map((r: { fileName: string; status: UploadResult["status"]; error?: string }) => ({
           fileName: r.fileName,
           status: r.status,
           error: r.error,

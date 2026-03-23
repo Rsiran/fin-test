@@ -1,19 +1,34 @@
 import { NextRequest } from "next/server";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
 import { openai } from "@/lib/openai";
 import { generateEmbedding } from "@/lib/embeddings";
 import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
+
+interface FinancialMetric {
+  period: string;
+  category: string;
+  metricName: string;
+  value: number;
+  unit: string;
+}
+
+interface ChunkResult {
+  _id: string;
+  content: string;
+  pageRange?: string;
+}
 
 /**
  * Format financial metrics into a readable summary for the chat context.
  * Groups metrics by period for easy comparison.
  */
-function formatMetricsSummary(metrics: any[]): string {
+function formatMetricsSummary(metrics: FinancialMetric[]): string {
   if (metrics.length === 0) return "";
 
   // Group by period
-  const byPeriod: Record<string, any[]> = {};
+  const byPeriod: Record<string, FinancialMetric[]> = {};
   for (const m of metrics) {
     if (!byPeriod[m.period]) byPeriod[m.period] = [];
     byPeriod[m.period].push(m);
@@ -25,7 +40,7 @@ function formatMetricsSummary(metrics: any[]): string {
   for (const period of periods) {
     summary += `### ${period}\n`;
     // Group by category within period
-    const byCategory: Record<string, any[]> = {};
+    const byCategory: Record<string, FinancialMetric[]> = {};
     for (const m of byPeriod[period]) {
       if (!byCategory[m.category]) byCategory[m.category] = [];
       byCategory[m.category].push(m);
@@ -101,7 +116,7 @@ export async function POST(req: NextRequest) {
     convex.query(api.financialMetrics.getByCompany, { companyId }),
   ]);
 
-  const conversationHistory = existingMessages.map((m: any) => ({
+  const conversationHistory = existingMessages.map((m: { role: string; content: string }) => ({
     role: m.role as "user" | "assistant",
     content: m.content,
   }));
@@ -122,7 +137,7 @@ export async function POST(req: NextRequest) {
 
   const MAX_CONTEXT_CHARS = 60000;
   let contextChars = 0;
-  const selectedChunks: any[] = [];
+  const selectedChunks: ChunkResult[] = [];
   for (const chunk of relevantChunks) {
     if (contextChars + chunk.content.length > MAX_CONTEXT_CHARS) break;
     selectedChunks.push(chunk);
@@ -130,7 +145,7 @@ export async function POST(req: NextRequest) {
   }
 
   const numberedContext = selectedChunks
-    .map((chunk: any, i: number) => `[Kilde ${i + 1}]\n${chunk.content}`)
+    .map((chunk, i) => `[Kilde ${i + 1}]\n${chunk.content}`)
     .join("\n\n---\n\n");
 
   // 4. Save user message
@@ -174,7 +189,7 @@ ${numberedContext}`,
   const encoder = new TextEncoder();
   let fullResponse = "";
 
-  const sourceMeta = selectedChunks.map((c: any, i: number) => ({
+  const sourceMeta = selectedChunks.map((c, i) => ({
     index: i + 1,
     chunkId: c._id,
     content: c.content.substring(0, 1500),
@@ -197,8 +212,8 @@ ${numberedContext}`,
         sessionId,
         role: "assistant",
         content: fullResponse,
-        sources: selectedChunks.slice(0, 10).map((c: any) => ({
-          chunkId: c._id,
+        sources: selectedChunks.slice(0, 10).map((c) => ({
+          chunkId: c._id as Id<"chunks">,
           content: c.content.substring(0, 1500),
           pageRange: c.pageRange,
         })),

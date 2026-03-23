@@ -10,6 +10,13 @@ import { CashflowChart } from "./cashflow-chart";
 import { ComparisonTable } from "./comparison-table";
 import { sortPeriods } from "@/lib/period-format";
 
+interface Metric {
+  metricName: string;
+  period: string;
+  value: number;
+  unit: string;
+}
+
 export function OverviewTab({ companyId }: { companyId: Id<"companies"> }) {
   const metrics = useQuery(api.financialMetrics.getByCompany, { companyId });
 
@@ -38,14 +45,15 @@ export function OverviewTab({ companyId }: { companyId: Id<"companies"> }) {
     );
   }
 
-  const periods = sortPeriods([...new Set(metrics.map((m) => m.period))]);
+  const typedMetrics = metrics as Metric[];
+  const periods = sortPeriods([...new Set(typedMetrics.map((m) => m.period))]);
   const latestPeriod = periods[periods.length - 1];
   const prevPeriod = periods.length >= 2 ? periods[periods.length - 2] : null;
 
   const getLatest = (name: string) =>
-    metrics.find((m) => m.metricName === name && m.period === latestPeriod);
+    typedMetrics.find((m) => m.metricName === name && m.period === latestPeriod);
   const getPrev = (name: string) =>
-    prevPeriod ? metrics.find((m) => m.metricName === name && m.period === prevPeriod) : null;
+    prevPeriod ? typedMetrics.find((m) => m.metricName === name && m.period === prevPeriod) : null;
 
   const calcChange = (name: string) => {
     const latest = getLatest(name);
@@ -65,22 +73,22 @@ export function OverviewTab({ companyId }: { companyId: Id<"companies"> }) {
 
   const revenueData = periods.map((p) => ({
     period: p,
-    value: metrics.find((m) => m.metricName === "driftsinntekter" && m.period === p)?.value ?? 0,
+    value: typedMetrics.find((m) => m.metricName === "driftsinntekter" && m.period === p)?.value ?? 0,
   }));
 
   const marginsData = periods.map((p) => ({
     period: p,
-    driftsmargin: metrics.find((m) => m.metricName === "driftsmargin" && m.period === p)?.value,
-    ebitda_margin: metrics.find((m) => m.metricName === "ebitda_margin" && m.period === p)?.value,
-    netto_margin: metrics.find((m) => m.metricName === "netto_margin" && m.period === p)?.value,
+    driftsmargin: typedMetrics.find((m) => m.metricName === "driftsmargin" && m.period === p)?.value,
+    ebitda_margin: typedMetrics.find((m) => m.metricName === "ebitda_margin" && m.period === p)?.value,
+    netto_margin: typedMetrics.find((m) => m.metricName === "netto_margin" && m.period === p)?.value,
   }));
 
   const cashflowData = periods.map((p) => ({
     period: p,
-    operasjonell: metrics.find((m) => m.metricName === "operasjonell_kontantstrom" && m.period === p)?.value,
-    investering: metrics.find((m) => m.metricName === "investeringsaktiviteter" && m.period === p)?.value,
-    finansiering: metrics.find((m) => m.metricName === "finansieringsaktiviteter" && m.period === p)?.value,
-    fcf: metrics.find((m) => m.metricName === "fri_kontantstrom" && m.period === p)?.value,
+    operasjonell: typedMetrics.find((m) => m.metricName === "operasjonell_kontantstrom" && m.period === p)?.value,
+    investering: typedMetrics.find((m) => m.metricName === "investeringsaktiviteter" && m.period === p)?.value,
+    finansiering: typedMetrics.find((m) => m.metricName === "finansieringsaktiviteter" && m.period === p)?.value,
+    fcf: typedMetrics.find((m) => m.metricName === "fri_kontantstrom" && m.period === p)?.value,
   }));
 
   return (

@@ -134,9 +134,9 @@ export function ChatInterface({
   }, []);
 
   // Build sources from saved message data
-  const getSourcesForMessage = useCallback((msg: any): SourceMeta[] => {
+  const getSourcesForMessage = useCallback((msg: { sources?: { chunkId: string; content: string; pageRange?: string }[] }): SourceMeta[] => {
     if (!msg.sources) return [];
-    return msg.sources.map((s: any, i: number) => ({
+    return msg.sources.map((s, i) => ({
       index: i + 1,
       chunkId: s.chunkId,
       content: s.content,
@@ -206,7 +206,7 @@ export function ChatInterface({
     <div className="flex flex-col h-[600px]">
       {/* Messages */}
       <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-2">
-        {messages?.map((msg) => {
+        {messages?.map((msg: { _id: string; role: string; content: string; sources?: { chunkId: string; content: string; pageRange?: string }[] }) => {
           const msgSources = getSourcesForMessage(msg);
           return (
             <div key={msg._id}>

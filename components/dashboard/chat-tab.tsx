@@ -34,7 +34,7 @@ export function ChatTab({ companyId }: { companyId: Id<"companies"> }) {
 
       {sessions && sessions.length > 1 && (
         <div className="flex gap-2 overflow-x-auto pb-2">
-          {sessions.map((s) => (
+          {sessions.map((s: { _id: Id<"chatSessions">; title?: string }) => (
             <button
               key={s._id}
               onClick={() => setActiveSessionId(s._id)}

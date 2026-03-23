@@ -54,6 +54,29 @@ export const remove = mutation({
   },
 });
 
+export const listMyCompanies = query({
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+
+    const entries = await ctx.db
+      .query("watchlist")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+
+    const results = await Promise.all(
+      entries.map(async (entry) => {
+        const company = await ctx.db.get(entry.companyId);
+        if (!company) return null;
+        return { ...company, watchlistId: entry._id };
+      })
+    );
+    return results.filter(
+      (c): c is NonNullable<typeof c> => c !== null
+    );
+  },
+});
+
 export const isWatching = query({
   args: { companyId: v.id("companies") },
   handler: async (ctx, args) => {

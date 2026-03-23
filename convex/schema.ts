@@ -22,6 +22,7 @@ export default defineSchema({
     errorMessage: v.optional(v.string()),
     markdownFileId: v.optional(v.id("_storage")),
     createdAt: v.number(),
+    uploadedBy: v.optional(v.id("users")),
   }).index("by_company", ["companyId"]),
 
   chunks: defineTable({
@@ -83,5 +84,6 @@ export default defineSchema({
     companyId: v.id("companies"),
   })
     .index("by_user", ["userId"])
+    .index("by_company", ["companyId"])
     .index("by_user_company", ["userId", "companyId"]),
 });

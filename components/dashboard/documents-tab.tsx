@@ -11,11 +11,14 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
   const company = useQuery(api.companies.get, { id: companyId });
   const documents = useQuery(api.documents.listByCompany, { companyId });
   const removeDocument = useMutation(api.documents.remove);
+  const currentUserId = useQuery(api.users.me);
   const [showDeleteAll, setShowDeleteAll] = useState(false);
 
+  const myDocuments = documents?.filter((d: { uploadedBy?: string }) => d.uploadedBy === currentUserId);
+
   const handleDeleteAll = async () => {
-    if (!documents) return;
-    for (const doc of documents) {
+    if (!myDocuments) return;
+    for (const doc of myDocuments) {
       await removeDocument({ id: doc._id });
     }
     setShowDeleteAll(false);
@@ -25,12 +28,12 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Dokumenter</h2>
-        {documents && documents.length > 0 && (
+        {myDocuments && myDocuments.length > 0 && (
           <button
             onClick={() => setShowDeleteAll(true)}
             className="text-xs text-[#666666] hover:text-negative transition-colors duration-150"
           >
-            Slett alle dokumenter
+            Slett mine dokumenter
           </button>
         )}
       </div>
@@ -41,7 +44,7 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
           <Warning size={20} className="text-negative mt-0.5 shrink-0" />
           <div className="flex-1">
             <p className="text-sm text-[#F5F5F5]">
-              Er du sikker på at du vil slette alle {documents?.length} dokumenter
+              Er du sikker på at du vil slette dine {myDocuments?.length} dokumenter
               for <strong>{company?.name}</strong>? Dette sletter også alle tilhørende
               nøkkeltall og chat-data. Handlingen kan ikke angres.
             </p>
@@ -50,7 +53,7 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
                 onClick={handleDeleteAll}
                 className="px-3 py-1.5 text-xs bg-negative text-white rounded-lg hover:brightness-90 transition-all duration-150"
               >
-                Ja, slett alt
+                Ja, slett mine dokumenter
               </button>
               <button
                 onClick={() => setShowDeleteAll(false)}
@@ -99,7 +102,7 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
               </tr>
             </thead>
             <tbody>
-              {documents.map((doc) => (
+              {documents.map((doc: { _id: Id<"documents">; fileName: string; reportType: string; period: string; status: string; uploadedBy?: string }) => (
                 <tr
                   key={doc._id}
                   className="border-b border-white/5 last:border-0 hover:bg-white/[0.03] transition-colors duration-150"
@@ -134,12 +137,14 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
                     </span>
                   </td>
                   <td className="py-3 px-4 text-right">
-                    <button
-                      onClick={() => removeDocument({ id: doc._id })}
-                      className="text-[#666666] hover:text-negative transition-colors duration-150"
-                    >
-                      <Trash size={16} />
-                    </button>
+                    {doc.uploadedBy === currentUserId && (
+                      <button
+                        onClick={() => removeDocument({ id: doc._id })}
+                        className="text-[#666666] hover:text-negative transition-colors duration-150"
+                      >
+                        <Trash size={16} />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

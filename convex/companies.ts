@@ -1,8 +1,11 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { getAuthUserId } from "@convex-dev/auth/server";
 
 export const list = query({
   handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
     return await ctx.db.query("companies").collect();
   },
 });
@@ -10,7 +13,43 @@ export const list = query({
 export const get = query({
   args: { id: v.id("companies") },
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
     return await ctx.db.get(args.id);
+  },
+});
+
+export const search = query({
+  args: { query: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+
+    let companies = await ctx.db.query("companies").collect();
+
+    if (args.query) {
+      const q = args.query.toLowerCase();
+      companies = companies.filter(
+        (c) =>
+          c.name.toLowerCase().includes(q) ||
+          (c.ticker && c.ticker.toLowerCase().includes(q))
+      );
+    }
+
+    const results = await Promise.all(
+      companies.map(async (company) => {
+        const docs = await ctx.db
+          .query("documents")
+          .withIndex("by_company", (q) => q.eq("companyId", company._id))
+          .collect();
+        const reportCount = docs.length;
+        const lastReportDate =
+          docs.length > 0 ? Math.max(...docs.map((d) => d.createdAt)) : null;
+        return { ...company, reportCount, lastReportDate };
+      })
+    );
+
+    return results;
   },
 });
 
@@ -21,16 +60,27 @@ export const create = mutation({
     description: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.insert("companies", {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Ikke autentisert");
+
+    const companyId = await ctx.db.insert("companies", {
       ...args,
       createdAt: Date.now(),
     });
+    // Auto-add to watchlist for the creating user
+    await ctx.db.insert("watchlist", {
+      userId,
+      companyId,
+    });
+    return companyId;
   },
 });
 
 export const remove = mutation({
   args: { id: v.id("companies") },
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Ikke autentisert");
     await ctx.db.delete(args.id);
   },
 });
@@ -38,6 +88,9 @@ export const remove = mutation({
 export const removeWithData = mutation({
   args: { id: v.id("companies") },
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Ikke autentisert");
+
     // Delete chunks
     const chunks = await ctx.db
       .query("chunks")
@@ -83,6 +136,15 @@ export const removeWithData = mutation({
         await ctx.db.delete(msg._id);
       }
       await ctx.db.delete(session._id);
+    }
+
+    // Delete watchlist entries
+    const watchlistEntries = await ctx.db
+      .query("watchlist")
+      .withIndex("by_company", (q) => q.eq("companyId", args.id))
+      .collect();
+    for (const entry of watchlistEntries) {
+      await ctx.db.delete(entry._id);
     }
 
     // Delete the company itself

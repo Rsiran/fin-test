@@ -1,6 +1,6 @@
 import { query, mutation, action } from "./_generated/server";
 import { v } from "convex/values";
-import { api } from "./_generated/api";
+import { Id } from "./_generated/dataModel";
 
 export const insert = mutation({
   args: {
@@ -22,7 +22,8 @@ export const search = action({
     embedding: v.array(v.float64()),
     limit: v.optional(v.number()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<Array<{ content: string; companyId: Id<"companies">; documentId: Id<"documents">; chunkIndex: number; pageRange?: string; score: number; _id: Id<"chunks">; _creationTime: number }>> => {
+    const { api } = await import("./_generated/api");
     const results = await ctx.vectorSearch("chunks", "by_embedding", {
       vector: args.embedding,
       limit: args.limit ?? 8,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
 import { convertPdfToMarkdown } from "@/lib/pdf-processor";
 import { chunkMarkdown } from "@/lib/chunker";
 import { generateEmbeddings } from "@/lib/embeddings";
@@ -23,7 +24,7 @@ export async function POST(req: NextRequest) {
 
     // Phase 1: Upload ALL files to Convex storage and create document records immediately.
     // This makes all documents visible in the UI right away with "Prosesserer..." status.
-    const fileEntries: { file: File; docId: any; storageId: any }[] = [];
+    const fileEntries: { file: File; docId: Id<"documents">; storageId: Id<"_storage"> }[] = [];
 
     for (const file of files) {
       try {
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest) {
         const { storageId } = await uploadResponse.json();
 
         const docId = await convex.mutation(api.documents.create, {
-          companyId: companyId as any,
+          companyId: companyId as Id<"companies">,
           fileName: file.name,
           fileId: storageId,
           reportType: "annet",
@@ -82,7 +83,7 @@ export async function POST(req: NextRequest) {
         for (let i = 0; i < chunks.length; i++) {
           await convex.mutation(api.chunks.insert, {
             documentId: docId,
-            companyId: companyId as any,
+            companyId: companyId as Id<"companies">,
             content: chunks[i].content,
             embedding: embeddings[i],
             chunkIndex: chunks[i].chunkIndex,
@@ -94,7 +95,7 @@ export async function POST(req: NextRequest) {
           await convex.mutation(api.financialMetrics.insertBatch, {
             metrics: extractionResult.metrics.map((m) => ({
               documentId: docId,
-              companyId: companyId as any,
+              companyId: companyId as Id<"companies">,
               period: extractionResult.period,
               category: m.category,
               metricName: m.metricName,
@@ -129,7 +130,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ results });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: "Upload failed" },
       { status: 500 }
