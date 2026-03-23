@@ -6,11 +6,17 @@ import { convertPdfToMarkdown } from "@/lib/pdf-processor";
 import { chunkMarkdown } from "@/lib/chunker";
 import { generateEmbeddings } from "@/lib/embeddings";
 import { extractFinancialData } from "@/lib/financial-extractor";
-
-const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
 
 export async function POST(req: NextRequest) {
   try {
+    const token = await convexAuthNextjsToken();
+    if (!token) {
+      return NextResponse.json({ error: "Ikke autentisert" }, { status: 401 });
+    }
+    const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+    convex.setAuth(token);
+
     const formData = await req.formData();
     const companyId = formData.get("companyId") as string;
     const files = formData.getAll("files") as File[];

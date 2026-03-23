@@ -46,8 +46,13 @@ export const updateStatus = mutation({
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Ikke autentisert");
+    const doc = await ctx.db.get(args.id);
+    if (!doc) throw new Error("Dokument ikke funnet");
+    if (doc.uploadedBy && doc.uploadedBy !== userId) {
+      throw new Error("Ingen tilgang til dette dokumentet");
+    }
     const { id, ...fields } = args;
-    const patch: Record<string, any> = {};
+    const patch: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(fields)) {
       if (value !== undefined) patch[key] = value;
     }
@@ -64,13 +69,11 @@ export const remove = mutation({
     const doc = await ctx.db.get(args.id);
     if (!doc) throw new Error("Dokument ikke funnet");
 
-    // Ownership check
+    // Ownership check — only block if owned by a different user
     if (doc.uploadedBy && doc.uploadedBy !== userId) {
       throw new Error("Du kan kun slette dokumenter du selv har lastet opp");
     }
-    if (!doc.uploadedBy) {
-      throw new Error("Kan ikke slette eldre dokumenter uten eier");
-    }
+    // Legacy documents without uploadedBy can be deleted by any authenticated user
 
     // Delete chunks
     const chunks = await ctx.db

@@ -36,20 +36,31 @@ export const search = query({
       );
     }
 
-    const results = await Promise.all(
-      companies.map(async (company) => {
-        const docs = await ctx.db
-          .query("documents")
-          .withIndex("by_company", (q) => q.eq("companyId", company._id))
-          .collect();
-        const reportCount = docs.length;
-        const lastReportDate =
-          docs.length > 0 ? Math.max(...docs.map((d) => d.createdAt)) : null;
-        return { ...company, reportCount, lastReportDate };
-      })
-    );
+    // Limit to 100 companies to avoid unbounded N+1 queries
+    const limited = companies.slice(0, 100);
 
-    return results;
+    // Fetch all documents once and group by company in-memory
+    const allDocs = await ctx.db.query("documents").collect();
+    const docsByCompany = new Map<string, { count: number; lastDate: number }>();
+    for (const doc of allDocs) {
+      const key = doc.companyId;
+      const existing = docsByCompany.get(key);
+      if (!existing) {
+        docsByCompany.set(key, { count: 1, lastDate: doc.createdAt });
+      } else {
+        existing.count++;
+        if (doc.createdAt > existing.lastDate) existing.lastDate = doc.createdAt;
+      }
+    }
+
+    return limited.map((company) => {
+      const stats = docsByCompany.get(company._id) ?? { count: 0, lastDate: null as number | null };
+      return {
+        ...company,
+        reportCount: stats.count,
+        lastReportDate: stats.lastDate,
+      };
+    });
   },
 });
 
@@ -73,15 +84,6 @@ export const create = mutation({
       companyId,
     });
     return companyId;
-  },
-});
-
-export const remove = mutation({
-  args: { id: v.id("companies") },
-  handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Ikke autentisert");
-    await ctx.db.delete(args.id);
   },
 });
 
