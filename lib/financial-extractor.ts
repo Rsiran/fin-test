@@ -164,12 +164,12 @@ Bruk disse metrikknavnene der tilgjengelig:
 Returner KUN gyldig JSON, ingen annen tekst.`;
 
 export async function extractFinancialData(markdown: string): Promise<ExtractionResult> {
-  const { openai } = await import("./openai");
+  const { getOpenAI } = await import("./openai");
 
   // Extract only financially relevant sections instead of sending entire document
   const financialContent = extractFinancialSections(markdown);
 
-  const response = await openai.chat.completions.create({
+  const response = await getOpenAI().chat.completions.create({
     model: "gpt-4o",
     messages: [
       { role: "system", content: EXTRACTION_PROMPT },

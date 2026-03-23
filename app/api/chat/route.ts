@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
-import { openai } from "@/lib/openai";
+import { getOpenAI } from "@/lib/openai";
 import { generateEmbedding } from "@/lib/embeddings";
 import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
 
@@ -77,7 +77,7 @@ async function buildSearchQuery(
   const context = recentMessages.map((m) => m.content).join(" ");
 
   // Use GPT-4o-mini (fast, cheap) to rewrite as a standalone query
-  const response = await openai.chat.completions.create({
+  const response = await getOpenAI().chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
       {
@@ -156,7 +156,7 @@ export async function POST(req: NextRequest) {
   });
 
   // 6. Stream GPT-4o response with both structured data and RAG sources
-  const stream = await openai.chat.completions.create({
+  const stream = await getOpenAI().chat.completions.create({
     model: "gpt-4o",
     stream: true,
     messages: [
