@@ -1,7 +1,10 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { authTables } from "@convex-dev/auth/server";
 
 export default defineSchema({
+  ...authTables,
+
   companies: defineTable({
     name: v.string(),
     ticker: v.optional(v.string()),
@@ -52,19 +55,33 @@ export default defineSchema({
 
   chatSessions: defineTable({
     companyId: v.id("companies"),
+    userId: v.optional(v.id("users")),
     title: v.optional(v.string()),
     createdAt: v.number(),
-  }).index("by_company", ["companyId"]),
+  })
+    .index("by_company", ["companyId"])
+    .index("by_company_user", ["companyId", "userId"]),
 
   chatMessages: defineTable({
     sessionId: v.id("chatSessions"),
     role: v.string(),
     content: v.string(),
-    sources: v.optional(v.array(v.object({
-      chunkId: v.id("chunks"),
-      content: v.string(),
-      pageRange: v.optional(v.string()),
-    }))),
+    sources: v.optional(
+      v.array(
+        v.object({
+          chunkId: v.id("chunks"),
+          content: v.string(),
+          pageRange: v.optional(v.string()),
+        })
+      )
+    ),
     createdAt: v.number(),
   }).index("by_session", ["sessionId"]),
+
+  watchlist: defineTable({
+    userId: v.id("users"),
+    companyId: v.id("companies"),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_company", ["userId", "companyId"]),
 });
