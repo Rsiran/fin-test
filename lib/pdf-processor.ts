@@ -18,6 +18,7 @@ export async function convertPdfToMarkdown(pdfBuffer: Buffer): Promise<string> {
       outputDir,
       format: "markdown",
       imageOutput: "off",
+      contentSafetyOff: "hidden-text",
       quiet: true,
     });
 

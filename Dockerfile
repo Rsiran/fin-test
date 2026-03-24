@@ -27,7 +27,7 @@ COPY --from=builder /app/public ./public
 
 # Limit Java heap to prevent OOM kills in constrained containers
 # _JAVA_OPTIONS is read automatically by the JVM
-ENV _JAVA_OPTIONS="-Xmx256m"
+ENV _JAVA_OPTIONS="-Xmx512m"
 
 EXPOSE 3000
 CMD ["node", "server.js"]
