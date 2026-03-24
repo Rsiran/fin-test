@@ -27,7 +27,7 @@ COPY --from=builder /app/public ./public
 
 # Java heap for PDF processing — must fit within Railway container RAM
 # _JAVA_OPTIONS is read automatically by the JVM
-ENV _JAVA_OPTIONS="-Xmx1g"
+ENV _JAVA_OPTIONS="-Xmx4g"
 
 EXPOSE 3000
 CMD ["node", "server.js"]
