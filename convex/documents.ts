@@ -42,6 +42,10 @@ export const updateStatus = mutation({
     markdownFileId: v.optional(v.id("_storage")),
     reportType: v.optional(v.string()),
     period: v.optional(v.string()),
+    currency: v.optional(v.string()),
+    originalUnit: v.optional(v.string()),
+    unitEvidence: v.optional(v.string()),
+    normalizationWarning: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
