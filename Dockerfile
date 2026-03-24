@@ -25,9 +25,9 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 
-# Limit Java heap to prevent OOM kills in constrained containers
+# Allow Java up to 4 GB heap for large PDF processing (300+ page reports)
 # _JAVA_OPTIONS is read automatically by the JVM
-ENV _JAVA_OPTIONS="-Xmx512m"
+ENV _JAVA_OPTIONS="-Xmx4g"
 
 EXPOSE 3000
 CMD ["node", "server.js"]
