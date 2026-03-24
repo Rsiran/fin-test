@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { X } from "@phosphor-icons/react";
 
 type Category = "bug" | "feature" | "general";
@@ -13,22 +14,10 @@ const CATEGORY_OPTIONS: { value: Category; label: string }[] = [
   { value: "general", label: "Annet" },
 ];
 
-const CATEGORY_STYLES: Record<Category, { active: string; ring: string }> = {
-  bug: {
-    active:
-      "bg-[#f8717133] text-[#f87171] border-[#f87171aa] shadow-[0_0_8px_#f8717122]",
-    ring: "border-[#f87171aa]",
-  },
-  feature: {
-    active:
-      "bg-[#2DD4BF22] text-accent border-[#2DD4BF88] shadow-[0_0_8px_#2DD4BF22]",
-    ring: "border-[#2DD4BF88]",
-  },
-  general: {
-    active:
-      "bg-[#88888822] text-[#aaa] border-[#888888aa] shadow-[0_0_8px_#88888822]",
-    ring: "border-[#888888aa]",
-  },
+const CATEGORY_STYLES: Record<Category, string> = {
+  bug: "bg-[#f8717133] text-[#f87171] border-[#f87171aa] shadow-[0_0_8px_#f8717122]",
+  feature: "bg-[#2DD4BF22] text-accent border-[#2DD4BF88] shadow-[0_0_8px_#2DD4BF22]",
+  general: "bg-[#88888822] text-[#aaa] border-[#888888aa] shadow-[0_0_8px_#88888822]",
 };
 
 const PLACEHOLDERS: Record<Category, string> = {
@@ -67,6 +56,15 @@ export function FeedbackWidget() {
     resetForm();
   }, [resetForm]);
 
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") handleClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, handleClose]);
+
   const handleScreenshot = useCallback((file: File) => {
     if (!file.type.startsWith("image/")) return;
     setScreenshotFile(file);
@@ -82,7 +80,7 @@ export function FeedbackWidget() {
 
     setSubmitting(true);
     try {
-      let screenshotId: string | undefined;
+      let screenshotId: Id<"_storage"> | undefined;
 
       if (screenshotFile) {
         const uploadUrl = await generateUploadUrl();
@@ -92,7 +90,7 @@ export function FeedbackWidget() {
           body: screenshotFile,
         });
         const { storageId } = await result.json();
-        screenshotId = storageId;
+        screenshotId = storageId as Id<"_storage">;
       }
 
       await submitFeedback({
@@ -102,7 +100,7 @@ export function FeedbackWidget() {
           category === "bug" ? stepsToReproduce.trim() : undefined,
         pageUrl: window.location.href,
         userAgent: navigator.userAgent,
-        screenshotId: screenshotId as any,
+        screenshotId,
       });
 
       setSubmitted(true);
@@ -126,7 +124,7 @@ export function FeedbackWidget() {
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          className="fixed top-1/2 right-0 -translate-y-1/2 z-40 bg-accent text-base font-bold text-[10px] tracking-[1.5px] uppercase px-[5px] py-3 rounded-l-md shadow-[-2px_0_8px_rgba(45,212,191,0.2)] hover:brightness-90 transition-all duration-150"
+          className="fixed top-1/2 right-0 -translate-y-1/2 z-40 bg-accent text-[#1A1A1E] font-bold text-[10px] tracking-[1.5px] uppercase px-[5px] py-3 rounded-l-md shadow-[-2px_0_8px_rgba(45,212,191,0.2)] hover:brightness-90 transition-all duration-150"
           style={{ writingMode: "vertical-rl" }}
         >
           FEEDBACK
@@ -177,7 +175,7 @@ export function FeedbackWidget() {
                         onClick={() => setCategory(opt.value)}
                         className={`text-xs px-3 py-1.5 rounded-full border transition-all duration-150 ${
                           category === opt.value
-                            ? CATEGORY_STYLES[opt.value].active
+                            ? CATEGORY_STYLES[opt.value]
                             : "bg-transparent text-[#666] border-[#88888833] hover:border-[#88888866]"
                         }`}
                       >
@@ -280,7 +278,7 @@ export function FeedbackWidget() {
                     <button
                       type="submit"
                       disabled={!isValid || submitting}
-                      className="w-full py-2.5 text-sm bg-accent text-base rounded-lg hover:brightness-90 transition-all duration-150 font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="w-full py-2.5 text-sm bg-accent text-[#1A1A1E] rounded-lg hover:brightness-90 transition-all duration-150 font-medium disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {submitting ? "Sender..." : "Send inn"}
                     </button>

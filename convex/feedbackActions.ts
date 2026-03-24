@@ -55,11 +55,16 @@ export const sendSlackNotification = internalAction({
       });
     }
 
-    await fetch(webhookUrl, {
+    const response = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ blocks }),
     });
+    if (!response.ok) {
+      console.error(
+        `Slack webhook failed: ${response.status} ${await response.text()}`
+      );
+    }
   },
 });
 
