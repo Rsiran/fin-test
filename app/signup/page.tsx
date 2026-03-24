@@ -3,6 +3,7 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useState } from "react";
 import Link from "next/link";
+import { setRememberMe as persistRememberMe, markSessionActive, clearAuthStorage } from "@/lib/auth-storage";
 
 export default function SignupPage() {
   const { signIn } = useAuthActions();
@@ -10,6 +11,7 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
 
   function validateForm(): string | null {
     if (!email.endsWith("@bi.no")) {
@@ -34,8 +36,11 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
+      persistRememberMe(rememberMe);
+      markSessionActive();
       await signIn("password", { email, password, flow: "signUp" });
     } catch {
+      clearAuthStorage();
       setError("Kunne ikke opprette konto. Prøv igjen.");
     } finally {
       setLoading(false);
@@ -86,6 +91,16 @@ export default function SignupPage() {
           {error && (
             <p className="text-negative text-sm">{error}</p>
           )}
+
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="accent-accent w-4 h-4"
+            />
+            <span className="text-sm text-[#AAAAAA]">Husk meg</span>
+          </label>
 
           <button
             type="submit"

@@ -3,6 +3,7 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useState } from "react";
 import Link from "next/link";
+import { setRememberMe as persistRememberMe, markSessionActive, clearAuthStorage } from "@/lib/auth-storage";
 
 export default function LoginPage() {
   const { signIn } = useAuthActions();
@@ -10,6 +11,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -17,8 +19,11 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      persistRememberMe(rememberMe);
+      markSessionActive();
       await signIn("password", { email, password, flow: "signIn" });
     } catch {
+      clearAuthStorage();
       setError("Feil e-post eller passord");
     } finally {
       setLoading(false);
@@ -67,6 +72,16 @@ export default function LoginPage() {
           {error && (
             <p className="text-negative text-sm">{error}</p>
           )}
+
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="accent-accent w-4 h-4"
+            />
+            <span className="text-sm text-[#AAAAAA]">Husk meg</span>
+          </label>
 
           <button
             type="submit"
