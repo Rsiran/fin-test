@@ -135,8 +135,8 @@ export function UploadProvider({
           });
           const processData = await processRes.json();
 
-          if (processData.status === "ready") {
-            updateResult(id, { status: "ready" });
+          if (processData.status === "ready" || processData.status === "processing") {
+            updateResult(id, { status: processData.status });
           } else {
             updateResult(id, {
               status: "error",
