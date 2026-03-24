@@ -49,4 +49,10 @@ describe("periodToFileName", () => {
     expect(periodToFileName("2024")).toBeNull();
     expect(periodToFileName("Q1 2025")).toBeNull();
   });
+
+  it("round-trips through canonicalizePeriod", () => {
+    expect(periodToFileName(canonicalizePeriod("Q2 2024"))).toBe("2Q24");
+    expect(periodToFileName(canonicalizePeriod("Årsrapport 2024"))).toBe("AR24");
+    expect(periodToFileName(canonicalizePeriod("H1 2025"))).toBe("H125");
+  });
 });
