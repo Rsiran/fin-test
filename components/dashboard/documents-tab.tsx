@@ -71,7 +71,7 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
         Laster opp til: <span className="text-accent">{company?.name ?? "..."}</span>
       </div>
 
-      <UploadDropzone companyId={companyId} />
+      <UploadDropzone />
 
       {documents === undefined ? (
         <div className="space-y-2">
