@@ -1,0 +1,12 @@
+import { cronJobs } from "convex/server";
+import { internal } from "./_generated/api";
+
+const crons = cronJobs();
+
+crons.interval(
+  "cleanup stale documents",
+  { hours: 1 },
+  internal.cleanupActions.cleanupStaleDocuments
+);
+
+export default crons;
