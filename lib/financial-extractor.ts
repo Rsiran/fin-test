@@ -12,6 +12,9 @@ export interface ExtractedMetric {
 export interface ExtractionResult {
   period: string;
   reportType: string;
+  currency?: string;
+  originalUnit?: string;
+  unitEvidence?: string;
   metrics: ExtractedMetric[];
 }
 
@@ -121,19 +124,45 @@ export function extractFinancialSections(markdown: string, maxChars = 80000): st
 
 const EXTRACTION_PROMPT = `Du er en ekspert på norsk finansanalyse. Analyser følgende utdrag fra en finansrapport og ekstraher alle tilgjengelige finansielle nøkkeltall.
 
-VIKTIG — NORMALISERING AV ENHETER:
-Ulike rapporter fra samme selskap kan bruke forskjellige skalaer (hele kroner, tusen, millioner, etc.).
-Du MÅ normalisere alle pengeverdier til MILLIONER av selskapets rapporteringsvaluta.
+KRITISK — ENHETDETEKSJON (gjør dette FØR du leser av noen tall):
+Ulike rapporter bruker forskjellige skalaer. Du MÅ identifisere skalaen FØRST ved å søke etter disse mønstrene i tabelloverskrifter, fotnoter, og starten av finansielle seksjoner:
+
+Tusen-indikatorer (del tallene på 1 000 for å normalisere til millioner):
+  - "Beløp i tusen" / "Amounts in thousands" / "in EUR thousands" / "in USD thousands"
+  - TNOK, TEUR, TSEK, TDKK, TUSD, TGBP
+  - "'000" / "(000s)" / "NOK 1 000" / "EUR 1 000" / "EUR'000" / "USD'000"
+  - "T€" / "T$" / "Tkr"
+  - Tabelloverskrift med "(tusen)" / "(thousands)" / "(in thousands)"
+  - "Tall i tusen" / "Figures in thousands" / "Expressed in thousands"
+
+Million-indikatorer (bruk tallene direkte):
+  - "Beløp i millioner" / "Amounts in millions" / "in EUR millions"
+  - MNOK, MEUR, MSEK, MDKK, MUSD, MGBP
+  - "mill." / "mill. kr" / "mKR" / "mill. NOK" / "mill. EUR"
+  - "M€" / "M$" / "Mkr"
+  - "Figures in millions" / "Expressed in millions"
+
+Milliard-indikatorer (gang tallene med 1 000 for å normalisere til millioner):
+  - "mrd." / "mrd. kr" / "milliarder" / "billions" / "BNOK" / "BEUR" / "BUSD"
+
+Hele enheter (del tallene på 1 000 000 for å normalisere til millioner):
+  - Ingen av mønstrene ovenfor funnet i dokumentet
+  - Tall har typisk 6+ sifre for inntekter/eiendeler hos mellomstore/store selskaper
+
+VIKTIG: Sitatbevis er PÅKREVD. Du MÅ finne og sitere den eksakte teksten som viser enheten.
+
+NORMALISERING:
+Alle pengeverdier skal normaliseres til MILLIONER av selskapets rapporteringsvaluta.
 
 Steg 1: Finn selskapets rapporteringsvaluta (NOK, EUR, USD, GBP, SEK, DKK, etc.)
   - Se etter "Beløp i...", "Amounts in...", valutasymboler, eller tabelloverskrifter
   - IKKE konverter mellom valutaer — behold selskapets egen valuta
 
-Steg 2: Normaliser alle pengeverdier til millioner av den valutaen:
-  - Hele kroner/currency (f.eks. "3 921 399") → del på 1 000 000 → 3,92
-  - Tusen/TNOK/T-prefix/'000 (f.eks. "3 500 TNOK" eller "248 738 EUR'000") → del på 1 000 → 3,5 / 248,7
-  - Millioner/MNOK/MEUR/mill./mKR (f.eks. "3 500 mKR") → bruk direkte → 3 500
-  - Milliarder/BNOK/mrd. → gang med 1 000
+Steg 2: Bruk skalaen du identifiserte ovenfor til å normalisere:
+  - Hele kroner/currency → del på 1 000 000
+  - Tusen (TNOK/'000 etc.) → del på 1 000
+  - Millioner (MNOK/mill. etc.) → bruk direkte
+  - Milliarder (mrd./BNOK etc.) → gang med 1 000
   - Prosenter og forholdstall → behold som de er
 
 Steg 3: Bruk riktig enhetslabel: MNOK, MEUR, MUSD, MGBP, MSEK, MDKK, etc.
@@ -143,7 +172,8 @@ Returner et JSON-objekt med denne strukturen:
   "period": "<rapporteringsperiode, f.eks. 'Q1 2025' eller 'Årsrapport 2024'>",
   "reportType": "<årsrapport|kvartalsrapport|prospekt|børsmelding|annet>",
   "currency": "<selskapets rapporteringsvaluta, f.eks. NOK, EUR, USD>",
-  "originalUnit": "<opprinnelig enhet i rapporten, f.eks. kr, TNOK, MNOK, EUR'000>",
+  "originalUnit": "<opprinnelig enhet i rapporten, f.eks. hele EUR, TEUR, MEUR, NOK'000>",
+  "unitEvidence": "<EKSAKT sitat fra dokumentet som viser enheten, f.eks. 'Amounts in EUR thousands'. Hvis ikke funnet: 'Ingen eksplisitt enhet funnet — antatt hele [valuta]'>",
   "metrics": [
     {
       "metricName": "<norsk navn>",
@@ -185,6 +215,13 @@ export async function extractFinancialData(markdown: string): Promise<Extraction
   const parsed = JSON.parse(content);
   const period = canonicalizePeriod(parsed.period || "");
   const reportType = parsed.reportType || "annet";
+  const currency = parsed.currency || undefined;
+  const originalUnit = parsed.originalUnit || undefined;
+  const unitEvidence = parsed.unitEvidence || undefined;
+
+  if (unitEvidence) {
+    console.log(`[unit-detection] currency=${currency}, originalUnit=${originalUnit}, evidence="${unitEvidence}"`);
+  }
 
   const { valid, rejected } = validateMetrics(parsed.metrics || []);
 
@@ -195,6 +232,9 @@ export async function extractFinancialData(markdown: string): Promise<Extraction
   return {
     period,
     reportType,
+    currency,
+    originalUnit,
+    unitEvidence,
     metrics: valid,
   };
 }

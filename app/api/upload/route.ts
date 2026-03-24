@@ -83,7 +83,41 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        // 8. Store financial metrics
+        // 8. Cross-period magnitude check
+        let normalizationWarning: string | undefined;
+        const newRevenue = extractionResult.metrics.find(
+          (m) => m.metricName === "driftsinntekter"
+        );
+        if (newRevenue) {
+          try {
+            const existingRevenue = await convex.query(
+              api.financialMetrics.getByCompanyAndMetric,
+              { companyId, metricName: "driftsinntekter" }
+            );
+            if (existingRevenue.length > 0) {
+              const latest = existingRevenue.sort((a, b) =>
+                b.period.localeCompare(a.period)
+              )[0];
+              if (latest.value !== 0) {
+                const ratio = newRevenue.value / latest.value;
+                if (ratio > 10 || ratio < 0.1) {
+                  normalizationWarning =
+                    `Mulig enhetsfeil: ${extractionResult.period} driftsinntekter ` +
+                    `(${newRevenue.value} ${newRevenue.unit}) er ${ratio.toFixed(1)}x ` +
+                    `av ${latest.period} (${latest.value} ${latest.unit}). ` +
+                    `Detektert originalUnit: "${extractionResult.originalUnit ?? "ukjent"}". ` +
+                    `Bevis: "${extractionResult.unitEvidence ?? "ingen"}"`;
+                  console.warn("MAGNITUDE CHECK FAILED:", normalizationWarning);
+                }
+              }
+            }
+          } catch (e) {
+            // Don't block upload if magnitude check fails
+            console.warn("Magnitude check error:", e);
+          }
+        }
+
+        // 9. Store financial metrics
         if (extractionResult.metrics.length > 0) {
           await convex.mutation(api.financialMetrics.insertBatch, {
             metrics: extractionResult.metrics.map((m) => ({
@@ -98,13 +132,17 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        // 9. Update document status to ready
+        // 10. Update document status to ready
         await convex.mutation(api.documents.updateStatus, {
           id: docId as Id<"documents">,
           status: "ready",
           markdownFileId: mdStorageId,
           period: extractionResult.period,
           reportType: extractionResult.reportType ?? "annet",
+          currency: extractionResult.currency,
+          originalUnit: extractionResult.originalUnit,
+          unitEvidence: extractionResult.unitEvidence,
+          normalizationWarning,
         });
 
         results.push({ docId, status: "ready" });
