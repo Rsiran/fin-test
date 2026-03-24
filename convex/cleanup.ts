@@ -1,7 +1,7 @@
 import { internalQuery, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 
-const STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
+const STALE_THRESHOLD_MS = 2 * 60 * 60 * 1000; // 2 hours
 const MAX_DOCS_PER_RUN = 50;
 const STALE_STATUSES = ["error", "uploading", "processing"];
 
