@@ -7,55 +7,71 @@ import { chunkMarkdown } from "@/lib/chunker";
 import { generateEmbeddings } from "@/lib/embeddings";
 import { extractFinancialData } from "@/lib/financial-extractor";
 import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
+import { downloadToFile, deleteObject } from "@/lib/r2";
+import { mkdtemp, readFile, rm } from "fs/promises";
+import { tmpdir } from "os";
+import { join } from "path";
 
-/**
- * Process documents that have already been uploaded to Convex storage.
- * Expects JSON body: { documents: [{ docId }] }
- * companyId is derived from the document record — never trusted from the client.
- */
 export async function POST(req: NextRequest) {
   try {
     const token = await convexAuthNextjsToken();
     if (!token) {
       return NextResponse.json({ error: "Ikke autentisert" }, { status: 401 });
     }
+
     const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
     convex.setAuth(token);
 
-    const { documents } = await req.json() as {
-      documents: { docId: string }[];
-    };
-
-    if (!documents || documents.length === 0) {
+    const { docId } = (await req.json()) as { docId: string };
+    if (!docId) {
       return NextResponse.json(
-        { error: "documents array is required" },
+        { error: "docId is required" },
         { status: 400 }
       );
     }
 
-    const results = [];
+    const typedDocId = docId as Id<"documents">;
 
-    for (const { docId } of documents) {
+    // 1. Fetch document and verify ownership + status
+    const doc = await convex.query(api.documents.get, { id: typedDocId });
+    if (!doc) {
+      return NextResponse.json(
+        { error: "Dokument ikke funnet" },
+        { status: 404 }
+      );
+    }
+    if (doc.status !== "uploading" || !doc.r2Key) {
+      return NextResponse.json(
+        { error: "Dokumentet er ikke klart for prosessering" },
+        { status: 400 }
+      );
+    }
+
+    const companyId = doc.companyId;
+    const r2Key = doc.r2Key;
+
+    // 2. Set status to "processing"
+    await convex.mutation(api.documents.updateStatus, {
+      id: typedDocId,
+      status: "processing",
+    });
+
+    try {
+      // 3. Download PDF from R2 to temp file
+      const tempDir = await mkdtemp(join(tmpdir(), "r2-download-"));
+      const pdfPath = join(tempDir, "input.pdf");
+
       try {
-        // 1. Fetch document (owner-only, includes storage URL)
-        const doc = await convex.query(api.documents.getWithFileUrl, {
-          id: docId as Id<"documents">,
-        });
-        if (!doc || !doc.fileUrl) {
-          throw new Error("Dokument ikke funnet eller ingen tilgang");
-        }
+        await downloadToFile(r2Key, pdfPath);
+        const pdfBuffer = await readFile(pdfPath);
 
-        const companyId = doc.companyId;
-
-        // 2. Download the PDF from Convex storage
-        const pdfResponse = await fetch(doc.fileUrl);
-        const pdfBuffer = Buffer.from(await pdfResponse.arrayBuffer());
-
-        // 3. Convert PDF to Markdown
+        // 4. Convert PDF to Markdown
         const markdown = await convertPdfToMarkdown(pdfBuffer);
 
-        // 4. Store markdown in Convex file storage
-        const mdUploadUrl = await convex.mutation(api.documents.generateUploadUrl);
+        // 5. Store markdown in Convex file storage
+        const mdUploadUrl = await convex.mutation(
+          api.documents.generateUploadUrl
+        );
         const mdUploadResponse = await fetch(mdUploadUrl, {
           method: "POST",
           headers: { "Content-Type": "text/markdown" },
@@ -63,19 +79,21 @@ export async function POST(req: NextRequest) {
         });
         const { storageId: mdStorageId } = await mdUploadResponse.json();
 
-        // 5. Run extraction and chunking in parallel
+        // 6. Run extraction and chunking in parallel
         const [extractionResult, chunks] = await Promise.all([
           extractFinancialData(markdown),
           Promise.resolve(chunkMarkdown(markdown)),
         ]);
 
-        // 6. Generate embeddings for all chunks
-        const embeddings = await generateEmbeddings(chunks.map((c) => c.content));
+        // 7. Generate embeddings for all chunks
+        const embeddings = await generateEmbeddings(
+          chunks.map((c) => c.content)
+        );
 
-        // 7. Store chunks with embeddings
+        // 8. Store chunks with embeddings
         for (let i = 0; i < chunks.length; i++) {
           await convex.mutation(api.chunks.insert, {
-            documentId: docId as Id<"documents">,
+            documentId: typedDocId,
             companyId,
             content: chunks[i].content,
             embedding: embeddings[i],
@@ -83,7 +101,7 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        // 8. Cross-period magnitude check
+        // 9. Cross-period magnitude check
         let normalizationWarning: string | undefined;
         const newRevenue = extractionResult.metrics.find(
           (m) => m.metricName === "driftsinntekter"
@@ -112,16 +130,15 @@ export async function POST(req: NextRequest) {
               }
             }
           } catch (e) {
-            // Don't block upload if magnitude check fails
             console.warn("Magnitude check error:", e);
           }
         }
 
-        // 9. Store financial metrics
+        // 10. Store financial metrics
         if (extractionResult.metrics.length > 0) {
           await convex.mutation(api.financialMetrics.insertBatch, {
             metrics: extractionResult.metrics.map((m) => ({
-              documentId: docId as Id<"documents">,
+              documentId: typedDocId,
               companyId,
               period: extractionResult.period,
               category: m.category,
@@ -132,9 +149,12 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        // 10. Update document status to ready
+        // 11. Delete PDF from R2 (best-effort)
+        await deleteObject(r2Key);
+
+        // 12. Update document status to ready, clear r2Key
         await convex.mutation(api.documents.updateStatus, {
-          id: docId as Id<"documents">,
+          id: typedDocId,
           status: "ready",
           markdownFileId: mdStorageId,
           period: extractionResult.period,
@@ -143,23 +163,25 @@ export async function POST(req: NextRequest) {
           originalUnit: extractionResult.originalUnit,
           unitEvidence: extractionResult.unitEvidence,
           normalizationWarning,
+          clearR2Key: true,
         });
 
-        results.push({ docId, status: "ready" });
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "Unknown error";
-        try {
-          await convex.mutation(api.documents.updateStatus, {
-            id: docId as Id<"documents">,
-            status: "error",
-            errorMessage,
-          });
-        } catch {}
-        results.push({ docId, status: "error", error: errorMessage });
+        return NextResponse.json({ docId, status: "ready" });
+      } finally {
+        await rm(tempDir, { recursive: true, force: true });
       }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      try {
+        await convex.mutation(api.documents.updateStatus, {
+          id: typedDocId,
+          status: "error",
+          errorMessage,
+        });
+      } catch {}
+      return NextResponse.json({ docId, status: "error", error: errorMessage });
     }
-
-    return NextResponse.json({ results });
   } catch {
     return NextResponse.json(
       { error: "Processing failed" },
