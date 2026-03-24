@@ -6,6 +6,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import { DocumentsTab } from "./documents-tab";
 import { OverviewTab } from "./overview-tab";
 import { ChatTab } from "./chat-tab";
+import { UploadProvider } from "../upload-context";
 import { ChartBar, FileText, ChatCircle } from "@phosphor-icons/react";
 
 const TABS = [
@@ -55,17 +56,13 @@ export function DashboardTabs({ companyId }: { companyId: Id<"companies"> }) {
         })}
       </div>
 
-      <div className="p-8 max-w-7xl mx-auto">
-        <div className={activeTab !== "oversikt" ? "hidden" : undefined}>
-          <OverviewTab companyId={companyId} />
+      <UploadProvider companyId={companyId}>
+        <div className="p-8 max-w-7xl mx-auto">
+          {activeTab === "oversikt" && <OverviewTab companyId={companyId} />}
+          {activeTab === "dokumenter" && <DocumentsTab companyId={companyId} />}
+          {activeTab === "chat" && <ChatTab companyId={companyId} />}
         </div>
-        <div className={activeTab !== "dokumenter" ? "hidden" : undefined}>
-          <DocumentsTab companyId={companyId} />
-        </div>
-        <div className={activeTab !== "chat" ? "hidden" : undefined}>
-          <ChatTab companyId={companyId} />
-        </div>
-      </div>
+      </UploadProvider>
     </div>
   );
 }
