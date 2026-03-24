@@ -15,6 +15,30 @@ import { join } from "path";
 // Must stay well below auth token TTL (~1h). See spec Section 4.
 const PROCESSING_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 
+// Serialize background processing — only one PDF at a time to avoid
+// concurrent Java processes exhausting container RAM (each needs ~4GB).
+const processingQueue: (() => void)[] = [];
+let isProcessing = false;
+
+function enqueueProcessing(fn: () => Promise<void>): void {
+  const run = async () => {
+    isProcessing = true;
+    try {
+      await fn();
+    } finally {
+      isProcessing = false;
+      const next = processingQueue.shift();
+      if (next) next();
+    }
+  };
+
+  if (!isProcessing) {
+    run();
+  } else {
+    processingQueue.push(() => { run(); });
+  }
+}
+
 async function processInBackground(
   convex: ConvexHttpClient,
   docId: Id<"documents">,
@@ -224,9 +248,9 @@ export async function POST(req: NextRequest) {
     // Capture r2Key after the guard — guaranteed to be defined here
     const r2Key = doc.r2Key;
 
-    // Fire and forget — processing runs in background
-    processInBackground(convex, typedDocId, doc.companyId, r2Key).catch(
-      () => {} // errors handled inside processInBackground
+    // Enqueue for sequential processing — only one Java process at a time
+    enqueueProcessing(() =>
+      processInBackground(convex, typedDocId, doc.companyId, r2Key)
     );
 
     return NextResponse.json({ docId, status: "processing" });
