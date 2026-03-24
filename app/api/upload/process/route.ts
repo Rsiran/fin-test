@@ -6,6 +6,7 @@ import { convertPdfToMarkdown } from "@/lib/pdf-processor";
 import { chunkMarkdown } from "@/lib/chunker";
 import { generateEmbeddings } from "@/lib/embeddings";
 import { extractFinancialData } from "@/lib/financial-extractor";
+import { periodToFileName } from "@/lib/period-format";
 import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
 import { downloadToFile, deleteObject } from "@/lib/r2";
 import { mkdtemp, readFile, rm } from "fs/promises";
@@ -187,6 +188,7 @@ async function doProcessing(
   // Guard: if timeout already set status to "error", don't overwrite
   const currentDoc = await convex.query(api.documents.get, { id: docId });
   if (currentDoc && currentDoc.status !== "error") {
+    const standardizedName = periodToFileName(extractionResult.period);
     await convex.mutation(api.documents.updateStatus, {
       id: docId,
       status: "ready",
@@ -197,6 +199,7 @@ async function doProcessing(
       originalUnit: extractionResult.originalUnit,
       unitEvidence: extractionResult.unitEvidence,
       normalizationWarning,
+      ...(standardizedName ? { fileName: standardizedName } : {}),
       clearR2Key: true,
     });
     console.log(`Processing ${docId}: complete`);

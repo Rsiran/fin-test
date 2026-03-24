@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { canonicalizePeriod } from "../lib/period-format";
+import { canonicalizePeriod, periodToFileName } from "../lib/period-format";
 
 describe("canonicalizePeriod", () => {
   it("parses quarterly formats", () => {
@@ -23,5 +23,36 @@ describe("canonicalizePeriod", () => {
 
   it("returns input unchanged if unrecognized", () => {
     expect(canonicalizePeriod("unknown format")).toBe("unknown format");
+  });
+});
+
+describe("periodToFileName", () => {
+  it("converts quarterly periods", () => {
+    expect(periodToFileName("2024-Q1")).toBe("1Q24");
+    expect(periodToFileName("2024-Q2")).toBe("2Q24");
+    expect(periodToFileName("2025-Q3")).toBe("3Q25");
+    expect(periodToFileName("2023-Q4")).toBe("4Q23");
+  });
+
+  it("converts annual periods", () => {
+    expect(periodToFileName("2024-FY")).toBe("AR24");
+    expect(periodToFileName("2023-FY")).toBe("AR23");
+  });
+
+  it("converts half-year periods", () => {
+    expect(periodToFileName("2025-H1")).toBe("H125");
+    expect(periodToFileName("2024-H2")).toBe("H224");
+  });
+
+  it("returns null for unrecognized formats", () => {
+    expect(periodToFileName("unknown")).toBeNull();
+    expect(periodToFileName("2024")).toBeNull();
+    expect(periodToFileName("Q1 2025")).toBeNull();
+  });
+
+  it("round-trips through canonicalizePeriod", () => {
+    expect(periodToFileName(canonicalizePeriod("Q2 2024"))).toBe("2Q24");
+    expect(periodToFileName(canonicalizePeriod("Årsrapport 2024"))).toBe("AR24");
+    expect(periodToFileName(canonicalizePeriod("H1 2025"))).toBe("H125");
   });
 });

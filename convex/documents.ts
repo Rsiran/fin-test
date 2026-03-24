@@ -51,6 +51,7 @@ export const updateStatus = mutation({
     originalUnit: v.optional(v.string()),
     unitEvidence: v.optional(v.string()),
     normalizationWarning: v.optional(v.string()),
+    fileName: v.optional(v.string()),
     clearR2Key: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
