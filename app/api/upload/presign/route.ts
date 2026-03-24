@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
       fileSize: number;
     };
 
-    if (!companyId || !fileName || !fileSize) {
+    if (!companyId || !fileName || typeof fileSize !== "number" || fileSize <= 0) {
       return NextResponse.json(
         { error: "companyId, fileName, and fileSize are required" },
         { status: 400 }

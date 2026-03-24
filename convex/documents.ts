@@ -125,7 +125,10 @@ export const get = query({
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return null;
-    return await ctx.db.get(args.id);
+    const doc = await ctx.db.get(args.id);
+    if (!doc) return null;
+    if (doc.uploadedBy && doc.uploadedBy !== userId) return null;
+    return doc;
   },
 });
 

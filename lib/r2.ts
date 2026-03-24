@@ -50,9 +50,13 @@ export async function downloadToFile(
   if (!response.Body) {
     throw new Error(`R2 object not found: ${key}`);
   }
-  const body = response.Body as Readable;
+  const body = response.Body;
+  const nodeStream =
+    body instanceof Readable
+      ? body
+      : Readable.fromWeb(body as unknown as import("stream/web").ReadableStream);
   const fileStream = createWriteStream(destPath);
-  await pipeline(body, fileStream);
+  await pipeline(nodeStream, fileStream);
 }
 
 /**

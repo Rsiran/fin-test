@@ -12,11 +12,14 @@ import {
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 
 interface UploadResult {
+  id: string;
   fileName: string;
   status: "uploading" | "processing" | "ready" | "error";
   progress?: number; // 0-100 for upload phase
   error?: string;
 }
+
+let uploadCounter = 0;
 
 function uploadToR2(
   url: string,
@@ -51,9 +54,9 @@ export function UploadDropzone({
   const [isUploading, setIsUploading] = useState(false);
 
   const updateResult = useCallback(
-    (fileName: string, update: Partial<UploadResult>) => {
+    (id: string, update: Partial<UploadResult>) => {
       setResults((prev) =>
-        prev.map((r) => (r.fileName === fileName ? { ...r, ...update } : r))
+        prev.map((r) => (r.id === id ? { ...r, ...update } : r))
       );
     },
     []
@@ -67,21 +70,32 @@ export function UploadDropzone({
       if (pdfFiles.length === 0) return;
 
       setIsUploading(true);
-      setResults(
-        pdfFiles.map((f) => {
-          if (f.size > MAX_FILE_SIZE) {
-            return {
+      const fileEntries = pdfFiles.map((f) => {
+        const id = String(++uploadCounter);
+        if (f.size > MAX_FILE_SIZE) {
+          return {
+            id,
+            file: f,
+            result: {
+              id,
               fileName: f.name,
               status: "error" as const,
               error: "Filen er for stor (maks 100 MB)",
-            };
-          }
-          return { fileName: f.name, status: "uploading" as const, progress: 0 };
-        })
-      );
+            },
+            skip: true,
+          };
+        }
+        return {
+          id,
+          file: f,
+          result: { id, fileName: f.name, status: "uploading" as const, progress: 0 },
+          skip: false,
+        };
+      });
+      setResults(fileEntries.map((e) => e.result));
 
-      for (const file of pdfFiles) {
-        if (file.size > MAX_FILE_SIZE) continue;
+      for (const { id, file, skip } of fileEntries) {
+        if (skip) continue;
 
         try {
           // 1. Get presigned URL
@@ -102,11 +116,11 @@ export function UploadDropzone({
 
           // 2. Upload directly to R2
           await uploadToR2(uploadUrl, file, (pct) => {
-            updateResult(file.name, { progress: pct });
+            updateResult(id, { progress: pct });
           });
 
           // 3. Trigger processing
-          updateResult(file.name, { status: "processing" });
+          updateResult(id, { status: "processing" });
           const processRes = await fetch("/api/upload/process", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -115,15 +129,15 @@ export function UploadDropzone({
           const processData = await processRes.json();
 
           if (processData.status === "ready") {
-            updateResult(file.name, { status: "ready" });
+            updateResult(id, { status: "ready" });
           } else {
-            updateResult(file.name, {
+            updateResult(id, {
               status: "error",
               error: processData.error || "Prosessering feilet",
             });
           }
         } catch (error) {
-          updateResult(file.name, {
+          updateResult(id, {
             status: "error",
             error:
               error instanceof Error
@@ -180,9 +194,9 @@ export function UploadDropzone({
 
       {results.length > 0 && (
         <div className="space-y-2">
-          {results.map((r, i) => (
+          {results.map((r) => (
             <div
-              key={i}
+              key={r.id}
               className="flex items-center gap-3 p-3 rounded-card bg-elevated"
             >
               {r.status === "ready" ? (
