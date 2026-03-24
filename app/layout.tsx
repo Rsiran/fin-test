@@ -3,6 +3,7 @@ import { Geist } from "next/font/google";
 import { JetBrains_Mono } from "next/font/google";
 import { ConvexAuthNextjsServerProvider } from "@convex-dev/auth/nextjs/server";
 import { ConvexClientProvider } from "./convex-client-provider";
+import { FeedbackWidget } from "@/components/feedback-widget";
 import "./globals.css";
 
 const geist = Geist({
@@ -31,7 +32,10 @@ export default function RootLayout({
     <ConvexAuthNextjsServerProvider>
       <html lang="no" className={`${geist.variable} ${jetbrainsMono.variable}`}>
         <body className="bg-base text-[#F5F5F5] font-sans antialiased">
-          <ConvexClientProvider>{children}</ConvexClientProvider>
+          <ConvexClientProvider>
+            {children}
+            <FeedbackWidget />
+          </ConvexClientProvider>
           <div className="fixed inset-0 z-10 pointer-events-none noise-overlay" />
         </body>
       </html>

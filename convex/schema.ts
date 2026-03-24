@@ -92,4 +92,19 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_company", ["companyId"])
     .index("by_user_company", ["userId", "companyId"]),
+
+  feedback: defineTable({
+    category: v.union(
+      v.literal("bug"),
+      v.literal("feature"),
+      v.literal("general")
+    ),
+    description: v.string(),
+    stepsToReproduce: v.optional(v.string()),
+    pageUrl: v.string(),
+    userEmail: v.string(),
+    userAgent: v.string(),
+    screenshotId: v.optional(v.id("_storage")),
+    createdAt: v.number(),
+  }).index("by_category", ["category"]),
 });
