@@ -3,6 +3,10 @@ import { writeFile, readFile, mkdtemp, rm, readdir } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 
+// Override JVM heap for opendataloader-pdf's Java subprocess.
+// Works in both local dev and Docker (Dockerfile also sets this).
+process.env._JAVA_OPTIONS = "-Xmx4g";
+
 /**
  * Convert a PDF buffer to markdown text using opendataloader-pdf.
  */
