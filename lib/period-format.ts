@@ -33,6 +33,25 @@ export function canonicalizePeriod(input: string): string {
   return input;
 }
 
+/**
+ * Convert a canonical period (e.g. "2024-Q2", "2024-FY", "2025-H1")
+ * to a standardized file name. Returns null for unrecognized formats.
+ *
+ * Examples: "2024-Q2" → "2Q24", "2024-FY" → "AR24", "2025-H1" → "H125"
+ */
+export function periodToFileName(period: string): string | null {
+  const qMatch = period.match(/^(\d{4})-Q([1-4])$/);
+  if (qMatch) return `${qMatch[2]}Q${qMatch[1].slice(2)}`;
+
+  const fyMatch = period.match(/^(\d{4})-FY$/);
+  if (fyMatch) return `AR${fyMatch[1].slice(2)}`;
+
+  const hMatch = period.match(/^(\d{4})-H([12])$/);
+  if (hMatch) return `H${hMatch[2]}${hMatch[1].slice(2)}`;
+
+  return null;
+}
+
 export function sortPeriods(periods: string[]): string[] {
   return [...periods].sort();
 }
