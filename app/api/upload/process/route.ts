@@ -15,12 +15,6 @@ import { join } from "path";
 // Must stay well below auth token TTL (~1h). See spec Section 4.
 const PROCESSING_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 
-function timeoutPromise(ms: number): Promise<never> {
-  return new Promise((_, reject) =>
-    setTimeout(() => reject(new Error("Prosessering tidsavbrutt (>10 min)")), ms)
-  );
-}
-
 async function processInBackground(
   convex: ConvexHttpClient,
   docId: Id<"documents">,
@@ -30,10 +24,21 @@ async function processInBackground(
   const tempDir = await mkdtemp(join(tmpdir(), "r2-download-"));
 
   try {
-    await Promise.race([
-      doProcessing(convex, docId, companyId, r2Key, tempDir),
-      timeoutPromise(PROCESSING_TIMEOUT_MS),
-    ]);
+    let timer: ReturnType<typeof setTimeout>;
+    const timeoutP = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error("Prosessering tidsavbrutt (>10 min)")),
+        PROCESSING_TIMEOUT_MS
+      );
+    });
+    try {
+      await Promise.race([
+        doProcessing(convex, docId, companyId, r2Key, tempDir),
+        timeoutP,
+      ]);
+    } finally {
+      clearTimeout(timer!);
+    }
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
