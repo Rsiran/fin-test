@@ -5,7 +5,7 @@ import { join } from "path";
 
 // Override JVM heap for opendataloader-pdf's Java subprocess.
 // Works in both local dev and Docker (Dockerfile also sets this).
-process.env._JAVA_OPTIONS = "-Xmx4g";
+process.env._JAVA_OPTIONS = "-Xmx1g";
 
 /**
  * Convert a PDF buffer to markdown text using opendataloader-pdf.

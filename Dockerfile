@@ -25,9 +25,9 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 
-# Allow Java up to 4 GB heap for large PDF processing (300+ page reports)
+# Java heap for PDF processing — must fit within Railway container RAM
 # _JAVA_OPTIONS is read automatically by the JVM
-ENV _JAVA_OPTIONS="-Xmx4g"
+ENV _JAVA_OPTIONS="-Xmx1g"
 
 EXPOSE 3000
 CMD ["node", "server.js"]
