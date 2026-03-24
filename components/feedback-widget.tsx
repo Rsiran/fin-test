@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { useMutation } from "convex/react";
+import { useMutation, useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { X } from "@phosphor-icons/react";
@@ -27,6 +27,7 @@ const PLACEHOLDERS: Record<Category, string> = {
 };
 
 export function FeedbackWidget() {
+  const { isAuthenticated } = useConvexAuth();
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState<Category>("bug");
   const [description, setDescription] = useState("");
@@ -37,6 +38,7 @@ export function FeedbackWidget() {
   );
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const submitFeedback = useMutation(api.feedback.submit);
@@ -79,6 +81,7 @@ export function FeedbackWidget() {
     if (category === "bug" && !stepsToReproduce.trim()) return;
 
     setSubmitting(true);
+    setError(null);
     try {
       let screenshotId: Id<"_storage"> | undefined;
 
@@ -89,6 +92,9 @@ export function FeedbackWidget() {
           headers: { "Content-Type": screenshotFile.type },
           body: screenshotFile,
         });
+        if (!result.ok) {
+          throw new Error("Skjermbilde-opplasting feilet");
+        }
         const { storageId } = await result.json();
         screenshotId = storageId as Id<"_storage">;
       }
@@ -107,8 +113,9 @@ export function FeedbackWidget() {
       setTimeout(() => {
         handleClose();
       }, 2000);
-    } catch (error) {
-      console.error("Failed to submit feedback:", error);
+    } catch (err) {
+      console.error("Failed to submit feedback:", err);
+      setError("Noe gikk galt. Vennligst prov igjen.");
     } finally {
       setSubmitting(false);
     }
@@ -117,6 +124,8 @@ export function FeedbackWidget() {
   const isValid =
     description.trim().length > 0 &&
     (category !== "bug" || stepsToReproduce.trim().length > 0);
+
+  if (!isAuthenticated) return null;
 
   return (
     <>
@@ -282,6 +291,11 @@ export function FeedbackWidget() {
                     >
                       {submitting ? "Sender..." : "Send inn"}
                     </button>
+                    {error && (
+                      <p className="text-center text-xs text-[#f87171] mt-1.5">
+                        {error}
+                      </p>
+                    )}
                     <p className="text-center text-[9px] text-[#555] mt-1.5">
                       Sendes til Jonas
                     </p>
