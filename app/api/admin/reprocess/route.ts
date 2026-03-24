@@ -4,11 +4,13 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { extractFinancialData } from "@/lib/financial-extractor";
 
+const MAX_DOCUMENTS = 20;
+
 /**
  * POST /api/admin/reprocess
  *
  * Re-extracts financial metrics from stored markdown for existing documents.
- * Deletes old metrics, runs improved extraction prompt, inserts new metrics.
+ * Atomically replaces old metrics with new ones per document.
  *
  * Headers:
  *   x-admin-secret: ADMIN_API_SECRET
@@ -28,15 +30,23 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   let docIds: Id<"documents">[];
 
-  if (body.companyId) {
+  if (typeof body.companyId === "string" && body.companyId) {
     docIds = await convex.query(api.admin.getReadyDocumentsByCompany, {
       companyId: body.companyId as Id<"companies">,
+      adminSecret: secret,
     });
   } else if (body.docIds && Array.isArray(body.docIds)) {
     docIds = body.docIds as Id<"documents">[];
   } else {
     return NextResponse.json(
       { error: "Provide docIds[] or companyId" },
+      { status: 400 },
+    );
+  }
+
+  if (docIds.length > MAX_DOCUMENTS) {
+    return NextResponse.json(
+      { error: `Too many documents (${docIds.length}). Max ${MAX_DOCUMENTS}.` },
       { status: 400 },
     );
   }
@@ -54,6 +64,7 @@ export async function POST(req: NextRequest) {
     try {
       const doc = await convex.query(api.admin.getDocumentWithMarkdown, {
         docId,
+        adminSecret: secret,
       });
       if (!doc || !doc.markdownUrl) {
         results.push({
@@ -80,27 +91,24 @@ export async function POST(req: NextRequest) {
       console.log(`Reprocessing ${doc.fileName} (${docId})`);
       const extraction = await extractFinancialData(markdown);
 
-      const deleted = await convex.mutation(
-        api.admin.deleteMetricsByDocument,
-        { documentId: docId },
+      const newMetrics = extraction.metrics.map((m) => ({
+        documentId: docId,
+        companyId: doc.companyId,
+        period: extraction.period,
+        category: m.category,
+        metricName: m.metricName,
+        value: m.value,
+        unit: m.unit,
+      }));
+
+      // Atomic: delete old + insert new in a single Convex mutation
+      const { deleted, inserted } = await convex.mutation(
+        api.admin.replaceMetrics,
+        { adminSecret: secret, documentId: docId, metrics: newMetrics },
       );
 
-      let inserted = 0;
-      if (extraction.metrics.length > 0) {
-        inserted = await convex.mutation(api.admin.insertMetricsAdmin, {
-          metrics: extraction.metrics.map((m) => ({
-            documentId: docId,
-            companyId: doc.companyId,
-            period: extraction.period,
-            category: m.category,
-            metricName: m.metricName,
-            value: m.value,
-            unit: m.unit,
-          })),
-        });
-      }
-
       await convex.mutation(api.admin.updateDocumentExtraction, {
+        adminSecret: secret,
         docId,
         period: extraction.period,
         reportType: extraction.reportType ?? "annet",

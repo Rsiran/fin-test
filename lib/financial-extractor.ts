@@ -29,8 +29,10 @@ const NON_NEGATIVE_METRICS = [
 
 /**
  * Balance sheet identity check: Assets ≈ Equity + Liabilities.
- * If sum_eiendeler deviates significantly, replace with the computed sum.
- * This catches LLM normalization errors (wrong divisor, comma misreads).
+ * If sum_eiendeler deviates significantly from the expected value,
+ * replace with computed sum and flag all three balance sheet metrics
+ * for review. Only corrects when the ratio is extreme (>10x off),
+ * suggesting a clear normalization error rather than accounting nuance.
  */
 function fixBalanceSheetMagnitude(metrics: ExtractedMetric[]): ExtractedMetric[] {
   const find = (name: string) => metrics.find((m) => m.metricName === name);
@@ -46,18 +48,24 @@ function fixBalanceSheetMagnitude(metrics: ExtractedMetric[]): ExtractedMetric[]
 
   const ratio = assets.value / expected;
 
-  // If assets are way off (not within 0.8x – 1.2x of equity+debt), replace with computed value
-  if (ratio < 0.8 || ratio > 1.2) {
+  // Only auto-correct extreme deviations (>10x off = clear normalization bug).
+  // Moderate deviations (0.8–1.2x) are normal rounding; 1.2–10x might be
+  // a legitimate accounting difference or a bad equity/debt value — flag but don't fix.
+  if (ratio < 0.1 || ratio > 10) {
     console.warn(
-      `MAGNITUDE FIX: sum_eiendeler=${assets.value} deviates from ` +
+      `BALANCE SHEET FIX: sum_eiendeler=${assets.value} is ${ratio.toFixed(4)}x of ` +
       `egenkapital(${equity.value})+total_gjeld(${debt.value})=${expected.toFixed(3)}. ` +
-      `Ratio=${ratio.toFixed(4)}. Replacing with computed value.`
+      `Replacing with computed value.`
     );
-    return metrics.map((m) =>
-      m.metricName === "sum_eiendeler"
-        ? { ...m, value: Math.round(expected * 1000) / 1000, confidence: "medium" as const }
-        : m
-    );
+    return metrics.map((m) => {
+      if (m.metricName === "sum_eiendeler") {
+        return { ...m, value: Math.round(expected * 1000) / 1000, confidence: "medium" as const, flagged: true };
+      }
+      if (m.metricName === "egenkapital" || m.metricName === "total_gjeld") {
+        return { ...m, flagged: true };
+      }
+      return m;
+    });
   }
 
   return metrics;
@@ -151,14 +159,14 @@ export function extractFinancialSections(markdown: string, maxChars = 80000): st
     score += Math.min(numberDensity, 20); // cap at 20
     score += hasTable ? 5 : 0;
 
-    return { section: trimmed, score };
+    return { section: trimmed, score, originalIdx: idx };
   });
 
   // Sort by score descending, take top sections up to budget
   scored.sort((a, b) => b.score - a.score);
 
   let totalChars = 0;
-  const selected: { section: string; score: number }[] = [];
+  const selected: { section: string; score: number; originalIdx: number }[] = [];
 
   for (const item of scored) {
     if (totalChars + item.section.length > maxChars) continue;
@@ -167,14 +175,7 @@ export function extractFinancialSections(markdown: string, maxChars = 80000): st
   }
 
   // Re-sort selected sections by their original document order
-  const originalOrder = sections.map((s) => s);
-  selected.sort(
-    (a, b) => {
-      const aIdx = originalOrder.findIndex((o) => a.section.startsWith(o.slice(0, 200)));
-      const bIdx = originalOrder.findIndex((o) => b.section.startsWith(o.slice(0, 200)));
-      return aIdx - bIdx;
-    }
-  );
+  selected.sort((a, b) => a.originalIdx - b.originalIdx);
 
   return selected.map((s) => s.section).join("\n\n");
 }
@@ -215,18 +216,9 @@ Hele enheter (del tallene på 1 000 000 for å normalisere til millioner):
 
 VIKTIG: Sitatbevis er PÅKREVD. Du MÅ finne og sitere den eksakte teksten som viser enheten.
 
-KRITISK REGEL 3 — TALLPARSING (komma vs. desimaltegn):
-I engelskspråklige finansrapporter er komma ALLTID tusenskilletegn, ALDRI desimaltegn.
-  - "1,252,560" = én million to hundre og femtito tusen fem hundre og seksti (1252560)
-  - "670,030" = seks hundre og sytti tusen og tretti (670030)
-  - "125,897" = ett hundre og tjuefem tusen åtte hundre og nittisyv (125897)
-Desimaltegn i disse rapportene er alltid punktum (.).
-Eksempler på normalisering fra EUR'000:
-  - "1,252,560" → 1252560 / 1000 = 1252.560 MEUR
-  - "125,897" → 125897 / 1000 = 125.897 MEUR
-  - "670,030" → 670030 / 1000 = 670.030 MEUR
+MERK: Komma er allerede fjernet fra tall i denne teksten. Alle tall er rene heltall (f.eks. 1252560, ikke 1,252,560). Desimaltegn er punktum (.).
 
-KRITISK REGEL 4 — METRIKKNAVNSTANDARDISERING:
+KRITISK REGEL 3 — METRIKKNAVNSTANDARDISERING:
 Bruk KUN metrikknavnene listet nedenfor. Hvis rapporten bruker en variant:
   - EBITDAR, EBITDA (before rent) → bruk "ebitda" (legg til confidence "medium" og noter varianten)
   - Driftsinntekter / Revenue / Total revenue / Omsetning → bruk "driftsinntekter"

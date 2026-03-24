@@ -1,12 +1,21 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
-// Admin functions — no user auth required.
-// Protected by ADMIN_API_SECRET check in the Next.js API route.
+// Admin functions — protected by adminSecret validated against ADMIN_API_SECRET env var.
+// Set via: npx convex env set ADMIN_API_SECRET <secret>
+
+function checkAdminSecret(secret: string) {
+  if (!process.env.ADMIN_API_SECRET || secret !== process.env.ADMIN_API_SECRET) {
+    throw new Error("Unauthorized");
+  }
+}
+
+// --- Queries ---
 
 export const getDocumentWithMarkdown = query({
-  args: { docId: v.id("documents") },
+  args: { docId: v.id("documents"), adminSecret: v.string() },
   handler: async (ctx, args) => {
+    checkAdminSecret(args.adminSecret);
     const doc = await ctx.db.get(args.docId);
     if (!doc || !doc.markdownFileId) return null;
     const url = await ctx.storage.getUrl(doc.markdownFileId);
@@ -21,8 +30,9 @@ export const getDocumentWithMarkdown = query({
 });
 
 export const getReadyDocumentsByCompany = query({
-  args: { companyId: v.id("companies") },
+  args: { companyId: v.id("companies"), adminSecret: v.string() },
   handler: async (ctx, args) => {
+    checkAdminSecret(args.adminSecret);
     const docs = await ctx.db
       .query("documents")
       .withIndex("by_company", (q) => q.eq("companyId", args.companyId))
@@ -33,22 +43,13 @@ export const getReadyDocumentsByCompany = query({
   },
 });
 
-export const deleteMetricsByDocument = mutation({
-  args: { documentId: v.id("documents") },
-  handler: async (ctx, args) => {
-    const metrics = await ctx.db
-      .query("financialMetrics")
-      .withIndex("by_document", (q) => q.eq("documentId", args.documentId))
-      .collect();
-    for (const m of metrics) {
-      await ctx.db.delete(m._id);
-    }
-    return metrics.length;
-  },
-});
+// --- Mutations ---
 
-export const insertMetricsAdmin = mutation({
+/** Atomically replace metrics for a document: delete old, insert new. */
+export const replaceMetrics = mutation({
   args: {
+    adminSecret: v.string(),
+    documentId: v.id("documents"),
     metrics: v.array(v.object({
       documentId: v.id("documents"),
       companyId: v.id("companies"),
@@ -60,28 +61,32 @@ export const insertMetricsAdmin = mutation({
     })),
   },
   handler: async (ctx, args) => {
+    checkAdminSecret(args.adminSecret);
+
+    // Delete old metrics
+    const old = await ctx.db
+      .query("financialMetrics")
+      .withIndex("by_document", (q) => q.eq("documentId", args.documentId))
+      .collect();
+    for (const m of old) {
+      await ctx.db.delete(m._id);
+    }
+
+    // Insert new metrics
     for (const metric of args.metrics) {
       await ctx.db.insert("financialMetrics", {
         ...metric,
         createdAt: Date.now(),
       });
     }
-    return args.metrics.length;
-  },
-});
 
-export const getMetricsByCompany = query({
-  args: { companyId: v.id("companies") },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("financialMetrics")
-      .withIndex("by_company", (q) => q.eq("companyId", args.companyId))
-      .collect();
+    return { deleted: old.length, inserted: args.metrics.length };
   },
 });
 
 export const updateDocumentExtraction = mutation({
   args: {
+    adminSecret: v.string(),
     docId: v.id("documents"),
     period: v.string(),
     reportType: v.string(),
@@ -91,7 +96,8 @@ export const updateDocumentExtraction = mutation({
     normalizationWarning: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const { docId, ...fields } = args;
+    checkAdminSecret(args.adminSecret);
+    const { adminSecret: _, docId, ...fields } = args;
     await ctx.db.patch(docId, fields);
   },
 });
