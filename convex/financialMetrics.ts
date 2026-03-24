@@ -38,15 +38,57 @@ export const insertBatch = mutation({
   },
 });
 
+// Derived ratios computed from absolute metrics at query time.
+// Only added when the stored metrics don't already include them.
+const DERIVED_RATIOS: {
+  name: string;
+  numerator: string;
+  denominator: string;
+  category: string;
+}[] = [
+  { name: "driftsmargin", numerator: "driftsresultat", denominator: "driftsinntekter", category: "nøkkeltall" },
+  { name: "ebitda_margin", numerator: "ebitda", denominator: "driftsinntekter", category: "nøkkeltall" },
+  { name: "netto_margin", numerator: "aarsresultat", denominator: "driftsinntekter", category: "nøkkeltall" },
+];
+
 export const getByCompany = query({
   args: { companyId: v.id("companies") },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return [];
-    return await ctx.db
+    const stored = await ctx.db
       .query("financialMetrics")
       .withIndex("by_company", (q) => q.eq("companyId", args.companyId))
       .collect();
+
+    // Compute derived ratios from absolute values
+    const periods = [...new Set(stored.map((m) => m.period))];
+    const derived: typeof stored = [];
+
+    for (const period of periods) {
+      const periodMetrics = stored.filter((m) => m.period === period);
+      for (const ratio of DERIVED_RATIOS) {
+        // Skip if already stored
+        if (periodMetrics.some((m) => m.metricName === ratio.name)) continue;
+        const num = periodMetrics.find((m) => m.metricName === ratio.numerator);
+        const den = periodMetrics.find((m) => m.metricName === ratio.denominator);
+        if (!num || !den || den.value === 0) continue;
+        derived.push({
+          _id: `derived_${ratio.name}_${period}` as typeof stored[0]["_id"],
+          _creationTime: 0,
+          documentId: num.documentId,
+          companyId: args.companyId,
+          period,
+          category: ratio.category,
+          metricName: ratio.name,
+          value: Math.round((num.value / den.value) * 1000) / 10,
+          unit: "%",
+          createdAt: 0,
+        });
+      }
+    }
+
+    return [...stored, ...derived];
   },
 });
 

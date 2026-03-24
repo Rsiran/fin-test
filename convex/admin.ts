@@ -43,6 +43,17 @@ export const getReadyDocumentsByCompany = query({
   },
 });
 
+export const getMetricsByCompany = query({
+  args: { companyId: v.id("companies"), adminSecret: v.string() },
+  handler: async (ctx, args) => {
+    checkAdminSecret(args.adminSecret);
+    return await ctx.db
+      .query("financialMetrics")
+      .withIndex("by_company", (q) => q.eq("companyId", args.companyId))
+      .collect();
+  },
+});
+
 // --- Mutations ---
 
 /** Atomically replace metrics for a document: delete old, insert new. */
