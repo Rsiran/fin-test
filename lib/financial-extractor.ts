@@ -27,11 +27,58 @@ const NON_NEGATIVE_METRICS = [
   "driftsinntekter", "sum_eiendeler", "egenkapital",
 ];
 
+/**
+ * Balance sheet identity check: Assets ≈ Equity + Liabilities.
+ * If sum_eiendeler deviates significantly from the expected value,
+ * replace with computed sum and flag all three balance sheet metrics
+ * for review. Only corrects when the ratio is extreme (>10x off),
+ * suggesting a clear normalization error rather than accounting nuance.
+ */
+function fixBalanceSheetMagnitude(metrics: ExtractedMetric[]): ExtractedMetric[] {
+  const find = (name: string) => metrics.find((m) => m.metricName === name);
+  const assets = find("sum_eiendeler");
+  const equity = find("egenkapital");
+  const debt = find("total_gjeld");
+
+  if (!assets || !equity || !debt) return metrics;
+  if (assets.unit === "%" || equity.unit === "%" || debt.unit === "%") return metrics;
+
+  const expected = equity.value + debt.value;
+  if (expected === 0) return metrics;
+
+  const ratio = assets.value / expected;
+
+  // Only auto-correct extreme deviations (>10x off = clear normalization bug).
+  // Moderate deviations (0.8–1.2x) are normal rounding; 1.2–10x might be
+  // a legitimate accounting difference or a bad equity/debt value — flag but don't fix.
+  if (ratio < 0.1 || ratio > 10) {
+    console.warn(
+      `BALANCE SHEET FIX: sum_eiendeler=${assets.value} is ${ratio.toFixed(4)}x of ` +
+      `egenkapital(${equity.value})+total_gjeld(${debt.value})=${expected.toFixed(3)}. ` +
+      `Replacing with computed value.`
+    );
+    return metrics.map((m) => {
+      if (m.metricName === "sum_eiendeler") {
+        return { ...m, value: Math.round(expected * 1000) / 1000, confidence: "medium" as const, flagged: true };
+      }
+      if (m.metricName === "egenkapital" || m.metricName === "total_gjeld") {
+        return { ...m, flagged: true };
+      }
+      return m;
+    });
+  }
+
+  return metrics;
+}
+
 export function validateMetrics(metrics: ExtractedMetric[]): ValidationResult {
+  // First fix any magnitude errors using accounting identities
+  const fixed = fixBalanceSheetMagnitude(metrics);
+
   const valid: ExtractedMetric[] = [];
   const rejected: { metric: ExtractedMetric; reason: string }[] = [];
 
-  for (const metric of metrics) {
+  for (const metric of fixed) {
     if (metric.unit === "%" && Math.abs(metric.value) > 100) {
       rejected.push({ metric, reason: `${metric.metricName}: value ${metric.value}% exceeds ±100%` });
       continue;
@@ -67,13 +114,22 @@ const FINANCIAL_KEYWORDS = [
   "revenue", "operating profit", "total assets", "total equity",
   "earnings per share", "consolidated statement", "financial highlights",
   "key figures", "profit and loss", "comprehensive income",
+  // APM / non-IFRS sections (often contain EBITDA tables)
+  "alternative performance", "non-ifrs", "non-gaap", "adjusted ebitda",
+  "performance measures", "reconciliation",
 ];
 
 /**
  * Extract only the financially relevant sections from a large document.
  * Splits on headings, scores each section by keyword density, returns
  * the top sections up to a token budget.
+ *
+ * Sections exceeding MAX_SECTION_CHARS are truncated to prevent a single
+ * bloated section (e.g. "General Information") from monopolising the budget
+ * and crowding out smaller but critical sections (e.g. APM / EBITDA tables).
  */
+const MAX_SECTION_CHARS = 15_000;
+
 export function extractFinancialSections(markdown: string, maxChars = 80000): string {
   // If already small enough, return as-is
   if (markdown.length <= maxChars) return markdown;
@@ -82,8 +138,13 @@ export function extractFinancialSections(markdown: string, maxChars = 80000): st
   const sections = markdown.split(/(?=^#{1,4}\s)/m).filter((s) => s.trim().length > 0);
 
   // Score each section by financial keyword matches
-  const scored = sections.map((section) => {
-    const lower = section.toLowerCase();
+  const scored = sections.map((section, idx) => {
+    // Truncate oversized sections — keep heading + first N chars
+    const trimmed = section.length > MAX_SECTION_CHARS
+      ? section.slice(0, MAX_SECTION_CHARS) + "\n[…truncated…]"
+      : section;
+
+    const lower = trimmed.toLowerCase();
     let score = 0;
     for (const kw of FINANCIAL_KEYWORDS) {
       // Count occurrences, weight heading matches higher
@@ -93,19 +154,19 @@ export function extractFinancialSections(markdown: string, maxChars = 80000): st
       score += bodyMatches;
     }
     // Boost sections with numbers and tables (likely financial data)
-    const numberDensity = (section.match(/\d[\d\s,.]+\d/g) || []).length;
-    const hasTable = section.includes("|") && section.includes("---");
+    const numberDensity = (trimmed.match(/\d[\d\s,.]+\d/g) || []).length;
+    const hasTable = trimmed.includes("|") && trimmed.includes("---");
     score += Math.min(numberDensity, 20); // cap at 20
     score += hasTable ? 5 : 0;
 
-    return { section, score };
+    return { section: trimmed, score, originalIdx: idx };
   });
 
   // Sort by score descending, take top sections up to budget
   scored.sort((a, b) => b.score - a.score);
 
   let totalChars = 0;
-  const selected: { section: string; score: number }[] = [];
+  const selected: { section: string; score: number; originalIdx: number }[] = [];
 
   for (const item of scored) {
     if (totalChars + item.section.length > maxChars) continue;
@@ -114,17 +175,21 @@ export function extractFinancialSections(markdown: string, maxChars = 80000): st
   }
 
   // Re-sort selected sections by their original document order
-  const originalOrder = sections.map((s) => s);
-  selected.sort(
-    (a, b) => originalOrder.indexOf(a.section) - originalOrder.indexOf(b.section)
-  );
+  selected.sort((a, b) => a.originalIdx - b.originalIdx);
 
   return selected.map((s) => s.section).join("\n\n");
 }
 
 const EXTRACTION_PROMPT = `Du er en ekspert på norsk finansanalyse. Analyser følgende utdrag fra en finansrapport og ekstraher alle tilgjengelige finansielle nøkkeltall.
 
-KRITISK — ENHETDETEKSJON (gjør dette FØR du leser av noen tall):
+KRITISK REGEL 1 — BRUK ALLTID TABELLVERDIER, IKKE NARRATIV TEKST:
+Finansrapporter inneholder både presis tabelldata og avrundede narrative oppsummeringer.
+Du MÅ ALLTID hente tall fra finansielle tabeller/oppstillinger (resultatregnskap, balanse, kontantstrøm, APM-tabeller), ALDRI fra løpende tekst som "amounted to EUR 126 million".
+- Tabellverdier er presise (f.eks. 125,897 i EUR'000 = 125.897 MEUR)
+- Narrative verdier er avrundet (f.eks. "EUR 126 million") og skal IGNORERES
+- Hvis en tabell og narrativ tekst gir forskjellige tall, bruk ALLTID tabellverdien
+
+KRITISK REGEL 2 — ENHETDETEKSJON (gjør dette FØR du leser av noen tall):
 Ulike rapporter bruker forskjellige skalaer. Du MÅ identifisere skalaen FØRST ved å søke etter disse mønstrene i tabelloverskrifter, fotnoter, og starten av finansielle seksjoner:
 
 Tusen-indikatorer (del tallene på 1 000 for å normalisere til millioner):
@@ -151,6 +216,15 @@ Hele enheter (del tallene på 1 000 000 for å normalisere til millioner):
 
 VIKTIG: Sitatbevis er PÅKREVD. Du MÅ finne og sitere den eksakte teksten som viser enheten.
 
+MERK: Komma er allerede fjernet fra tall i denne teksten. Alle tall er rene heltall (f.eks. 1252560, ikke 1,252,560). Desimaltegn er punktum (.).
+
+KRITISK REGEL 3 — METRIKKNAVNSTANDARDISERING:
+Bruk KUN metrikknavnene listet nedenfor. Hvis rapporten bruker en variant:
+  - EBITDAR, EBITDA (before rent) → bruk "ebitda" (legg til confidence "medium" og noter varianten)
+  - Driftsinntekter / Revenue / Total revenue / Omsetning → bruk "driftsinntekter"
+  - Operating profit / EBIT → bruk "driftsresultat"
+Hent alltid verdien for GJELDENDE rapporteringsperiode. Ikke hent historiske sammenligningsperioder.
+
 NORMALISERING:
 Alle pengeverdier skal normaliseres til MILLIONER av selskapets rapporteringsvaluta.
 
@@ -166,6 +240,8 @@ Steg 2: Bruk skalaen du identifiserte ovenfor til å normalisere:
   - Prosenter og forholdstall → behold som de er
 
 Steg 3: Bruk riktig enhetslabel: MNOK, MEUR, MUSD, MGBP, MSEK, MDKK, etc.
+
+PRESISJON: Behold full presisjon fra tabellverdien. Eksempel: 125897 EUR'000 → 125.897 MEUR (IKKE 126 MEUR).
 
 Returner et JSON-objekt med denne strukturen:
 {
@@ -193,11 +269,23 @@ Bruk disse metrikknavnene der tilgjengelig:
 
 Returner KUN gyldig JSON, ingen annen tekst.`;
 
+/**
+ * Strip commas from numbers in financial text to prevent LLM parsing errors.
+ * "1,252,560" → "1252560", "EUR 1,253 million" → "EUR 1253 million"
+ * Preserves commas in non-numeric contexts (e.g. natural language).
+ */
+function stripNumericCommas(text: string): string {
+  // Match numbers with comma-separated groups: 1,252,560 or 670,030
+  return text.replace(/\b(\d{1,3})(,\d{3})+\b/g, (match) =>
+    match.replace(/,/g, "")
+  );
+}
+
 export async function extractFinancialData(markdown: string): Promise<ExtractionResult> {
   const { getOpenAI } = await import("./openai");
 
   // Extract only financially relevant sections instead of sending entire document
-  const financialContent = extractFinancialSections(markdown);
+  const financialContent = stripNumericCommas(extractFinancialSections(markdown));
 
   const response = await getOpenAI().chat.completions.create({
     model: "gpt-4o",

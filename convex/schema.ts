@@ -56,6 +56,7 @@ export default defineSchema({
     unit: v.string(),
     createdAt: v.number(),
   })
+    .index("by_document", ["documentId"])
     .index("by_company", ["companyId"])
     .index("by_company_metric", ["companyId", "metricName"]),
 

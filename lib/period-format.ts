@@ -27,6 +27,9 @@ export function canonicalizePeriod(input: string): string {
   const arsMatch = s.match(/årsrapport\s*(\d{4})/);
   if (arsMatch) return `${arsMatch[1]}-FY`;
 
+  const annualMatch = s.match(/annual\s*report[\s\-:for]*(\d{4})/);
+  if (annualMatch) return `${annualMatch[1]}-FY`;
+
   const yearMatch = s.match(/^(\d{4})$/);
   if (yearMatch) return `${yearMatch[1]}-FY`;
 
