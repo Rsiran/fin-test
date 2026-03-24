@@ -6,6 +6,8 @@ import { extractFinancialData } from "@/lib/financial-extractor";
 
 const MAX_DOCUMENTS = 20;
 
+const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+
 /**
  * POST /api/admin/reprocess
  *
@@ -18,6 +20,9 @@ const MAX_DOCUMENTS = 20;
  * Body (one of):
  *   { "docIds": ["id1", "id2"] }   — reprocess specific documents
  *   { "companyId": "..." }          — reprocess all ready documents for a company
+ *
+ * Note: adminSecret is passed as an argument to Convex functions and will
+ * appear in Convex dashboard logs. Rotate periodically.
  */
 export async function POST(req: NextRequest) {
   const secret = req.headers.get("x-admin-secret");
@@ -25,9 +30,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
 
-  const body = await req.json();
   let docIds: Id<"documents">[];
 
   if (typeof body.companyId === "string" && body.companyId) {
