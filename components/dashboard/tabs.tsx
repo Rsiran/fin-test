@@ -56,9 +56,15 @@ export function DashboardTabs({ companyId }: { companyId: Id<"companies"> }) {
       </div>
 
       <div className="p-8 max-w-7xl mx-auto">
-        {activeTab === "oversikt" && <OverviewTab companyId={companyId} />}
-        {activeTab === "dokumenter" && <DocumentsTab companyId={companyId} />}
-        {activeTab === "chat" && <ChatTab companyId={companyId} />}
+        <div className={activeTab !== "oversikt" ? "hidden" : undefined}>
+          <OverviewTab companyId={companyId} />
+        </div>
+        <div className={activeTab !== "dokumenter" ? "hidden" : undefined}>
+          <DocumentsTab companyId={companyId} />
+        </div>
+        <div className={activeTab !== "chat" ? "hidden" : undefined}>
+          <ChatTab companyId={companyId} />
+        </div>
       </div>
     </div>
   );
