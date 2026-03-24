@@ -10,7 +10,8 @@ import {
 import { useUpload } from "./upload-context";
 
 export function UploadDropzone() {
-  const { results, isUploading, handleFiles } = useUpload();
+  const { results, isUploading, handleFiles, clearCompleted } = useUpload();
+  const hasCompleted = results.some((r) => r.status === "ready" || r.status === "error");
   const [isDragging, setIsDragging] = useState(false);
 
   return (
@@ -55,6 +56,14 @@ export function UploadDropzone() {
 
       {results.length > 0 && (
         <div className="space-y-2">
+          {hasCompleted && !isUploading && (
+            <button
+              onClick={clearCompleted}
+              className="text-xs text-[#666666] hover:text-[#AAAAAA] transition-colors duration-150"
+            >
+              Fjern fullførte
+            </button>
+          )}
           {results.map((r) => (
             <div
               key={r.id}

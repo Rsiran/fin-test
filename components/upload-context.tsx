@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useRef, useMemo, type ReactNode } from "react";
 import { Id } from "@/convex/_generated/dataModel";
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
@@ -13,7 +13,6 @@ export interface UploadResult {
   error?: string;
 }
 
-let uploadCounter = 0;
 
 function uploadToR2(
   url: string,
@@ -42,6 +41,7 @@ interface UploadContextValue {
   results: UploadResult[];
   isUploading: boolean;
   handleFiles: (files: FileList | File[]) => void;
+  clearCompleted: () => void;
 }
 
 const UploadContext = createContext<UploadContextValue | null>(null);
@@ -54,7 +54,15 @@ export function UploadProvider({
   children: ReactNode;
 }) {
   const [results, setResults] = useState<UploadResult[]>([]);
-  const [isUploading, setIsUploading] = useState(false);
+  const counterRef = useRef(0);
+  const isUploading = useMemo(
+    () => results.some((r) => r.status === "uploading" || r.status === "processing"),
+    [results]
+  );
+
+  const clearCompleted = useCallback(() => {
+    setResults((prev) => prev.filter((r) => r.status === "uploading" || r.status === "processing"));
+  }, []);
 
   const updateResult = useCallback(
     (id: string, update: Partial<UploadResult>) => {
@@ -72,9 +80,8 @@ export function UploadProvider({
       );
       if (pdfFiles.length === 0) return;
 
-      setIsUploading(true);
       const fileEntries = pdfFiles.map((f) => {
-        const id = String(++uploadCounter);
+        const id = String(++counterRef.current);
         if (f.size > MAX_FILE_SIZE) {
           return {
             id,
@@ -147,13 +154,12 @@ export function UploadProvider({
         }
       }
 
-      setIsUploading(false);
     },
     [companyId, updateResult]
   );
 
   return (
-    <UploadContext.Provider value={{ results, isUploading, handleFiles }}>
+    <UploadContext.Provider value={{ results, isUploading, handleFiles, clearCompleted }}>
       {children}
     </UploadContext.Provider>
   );
