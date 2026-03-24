@@ -160,20 +160,25 @@ async function doProcessing(
   await deleteObject(r2Key);
 
   // 12. Update document status to ready, clear r2Key
-  await convex.mutation(api.documents.updateStatus, {
-    id: docId,
-    status: "ready",
-    markdownFileId: mdStorageId,
-    period: extractionResult.period,
-    reportType: extractionResult.reportType ?? "annet",
-    currency: extractionResult.currency,
-    originalUnit: extractionResult.originalUnit,
-    unitEvidence: extractionResult.unitEvidence,
-    normalizationWarning,
-    clearR2Key: true,
-  });
-
-  console.log(`Processing ${docId}: complete`);
+  // Guard: if timeout already set status to "error", don't overwrite
+  const currentDoc = await convex.query(api.documents.get, { id: docId });
+  if (currentDoc && currentDoc.status !== "error") {
+    await convex.mutation(api.documents.updateStatus, {
+      id: docId,
+      status: "ready",
+      markdownFileId: mdStorageId,
+      period: extractionResult.period,
+      reportType: extractionResult.reportType ?? "annet",
+      currency: extractionResult.currency,
+      originalUnit: extractionResult.originalUnit,
+      unitEvidence: extractionResult.unitEvidence,
+      normalizationWarning,
+      clearR2Key: true,
+    });
+    console.log(`Processing ${docId}: complete`);
+  } else {
+    console.warn(`Processing ${docId}: skipping status update — document already in terminal state`);
+  }
 }
 
 export async function POST(req: NextRequest) {

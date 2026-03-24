@@ -133,10 +133,18 @@ export function UploadProvider({
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ docId }),
           });
+          if (!processRes.ok) {
+            const err = await processRes.json().catch(() => ({}));
+            throw new Error((err as { error?: string }).error || `Prosessering feilet (${processRes.status})`);
+          }
           const processData = await processRes.json();
 
-          if (processData.status === "ready" || processData.status === "processing") {
-            updateResult(id, { status: processData.status });
+          if (processData.status === "ready") {
+            updateResult(id, { status: "ready" });
+          } else if (processData.status === "processing") {
+            // Handed off to background — remove from local upload results.
+            // DocumentsTab reactive query shows real processing status.
+            setResults((prev) => prev.filter((r) => r.id !== id));
           } else {
             updateResult(id, {
               status: "error",
