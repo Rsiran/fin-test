@@ -7,10 +7,14 @@ export const listByCompany = query({
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return [];
-    return await ctx.db
+    const docs = await ctx.db
       .query("documents")
       .withIndex("by_company", (q) => q.eq("companyId", args.companyId))
       .collect();
+    const oneHourAgo = Date.now() - 60 * 60 * 1000;
+    return docs.filter(
+      (d) => d.status !== "uploading" || d.createdAt > oneHourAgo
+    );
   },
 });
 
@@ -18,7 +22,8 @@ export const create = mutation({
   args: {
     companyId: v.id("companies"),
     fileName: v.string(),
-    fileId: v.id("_storage"),
+    fileId: v.optional(v.id("_storage")),
+    r2Key: v.optional(v.string()),
     reportType: v.string(),
     period: v.string(),
   },
@@ -28,7 +33,7 @@ export const create = mutation({
     return await ctx.db.insert("documents", {
       ...args,
       uploadedBy: userId,
-      status: "processing",
+      status: args.r2Key ? "uploading" : "processing",
       createdAt: Date.now(),
     });
   },
@@ -46,6 +51,7 @@ export const updateStatus = mutation({
     originalUnit: v.optional(v.string()),
     unitEvidence: v.optional(v.string()),
     normalizationWarning: v.optional(v.string()),
+    clearR2Key: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -55,10 +61,13 @@ export const updateStatus = mutation({
     if (doc.uploadedBy && doc.uploadedBy !== userId) {
       throw new Error("Ingen tilgang til dette dokumentet");
     }
-    const { id, ...fields } = args;
+    const { id, clearR2Key, ...fields } = args;
     const patch: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(fields)) {
       if (value !== undefined) patch[key] = value;
+    }
+    if (clearR2Key) {
+      patch.r2Key = undefined;
     }
     await ctx.db.patch(id, patch);
   },
@@ -99,7 +108,9 @@ export const remove = mutation({
     }
 
     // Delete storage files
-    await ctx.storage.delete(doc.fileId);
+    if (doc.fileId) {
+      await ctx.storage.delete(doc.fileId);
+    }
     if (doc.markdownFileId) {
       await ctx.storage.delete(doc.markdownFileId);
     }
@@ -114,7 +125,10 @@ export const get = query({
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return null;
-    return await ctx.db.get(args.id);
+    const doc = await ctx.db.get(args.id);
+    if (!doc) return null;
+    if (doc.uploadedBy && doc.uploadedBy !== userId) return null;
+    return doc;
   },
 });
 
@@ -127,7 +141,7 @@ export const getWithFileUrl = query({
     const doc = await ctx.db.get(args.id);
     if (!doc) return null;
     if (doc.uploadedBy !== userId) return null;
-    const fileUrl = await ctx.storage.getUrl(doc.fileId);
+    const fileUrl = doc.fileId ? await ctx.storage.getUrl(doc.fileId) : null;
     return { ...doc, fileUrl };
   },
 });
