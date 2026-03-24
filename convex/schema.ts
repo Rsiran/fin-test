@@ -15,7 +15,8 @@ export default defineSchema({
   documents: defineTable({
     companyId: v.id("companies"),
     fileName: v.string(),
-    fileId: v.id("_storage"),
+    fileId: v.optional(v.id("_storage")),
+    r2Key: v.optional(v.string()),
     reportType: v.string(),
     period: v.string(),
     status: v.string(),
