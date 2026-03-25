@@ -205,7 +205,24 @@ export function ReportFilterProvider({
     const readyDocIds = new Set(
       filteredDocs.filter((d) => d.status === "ready").map((d) => d._id),
     );
-    return filterMetricsByDocuments(enrichedMetrics, readyDocIds);
+    let mets = filterMetricsByDocuments(enrichedMetrics, readyDocIds);
+
+    // When filtering by report type, also check that derived metrics have a
+    // period type consistent with the filtered documents. Without this, Q4
+    // (a quarterly figure derived from FY-9M) would show when filtering for
+    // only annual reports, or be hidden when filtering for only quarterly reports.
+    if (selectedTypes.length > 0) {
+      const readyDocs = filteredDocs.filter((d) => d.status === "ready");
+      const hasAnnual = readyDocs.some((d) => d.period.endsWith("-FY"));
+      const hasQuarterly = readyDocs.some((d) => !d.period.endsWith("-FY"));
+      mets = mets.filter((m) => {
+        if ((m as { source?: string }).source !== "derived") return true;
+        const isAnnual = m.period.endsWith("-FY");
+        return isAnnual ? hasAnnual : hasQuarterly;
+      });
+    }
+
+    return mets;
   }, [enrichedMetrics, filteredDocs, selectedTypes, selectedYears]);
 
   const counts = useMemo(
