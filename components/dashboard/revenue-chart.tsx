@@ -8,6 +8,7 @@ import {
 
 interface RevenueChartProps {
   data: { period: string; value: number }[];
+  unit?: string;
 }
 
 const GRID_STROKE = "rgba(255,255,255,0.06)";
@@ -20,14 +21,14 @@ const TOOLTIP_STYLE = {
   fontSize: "12px",
 };
 
-export function RevenueChart({ data }: RevenueChartProps) {
+export function RevenueChart({ data, unit }: RevenueChartProps) {
   const [chartType, setChartType] = useState<"bar" | "line">("bar");
 
   return (
     <div className="bg-elevated rounded-card shadow-card p-5">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-[9px] font-sans uppercase tracking-[1px] text-[#666666]">
-          Driftsinntekter (MNOK)
+          Driftsinntekter ({unit || "MNOK"})
         </h3>
         <div className="flex gap-1">
           {(["bar", "line"] as const).map((type) => (

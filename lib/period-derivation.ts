@@ -37,6 +37,14 @@ const DERIVATION_RULES: [string, string, string, string][] = [
   ["Q4", "FY", "9M", "FY - 9M"],
 ];
 
+// Map cumulative periods to the standalone quarter they end on.
+// H1 balance sheet (30 Jun) = Q2 end-of-quarter snapshot, etc.
+const CUMULATIVE_TO_QUARTER: Record<string, string> = {
+  H1: "Q2",
+  "9M": "Q3",
+  FY: "Q4",
+};
+
 const MARGIN_RATIOS = [
   { name: "driftsmargin", numerator: "driftsresultat", denominator: "driftsinntekter" },
   { name: "ebitda_margin", numerator: "ebitda", denominator: "driftsinntekter" },
@@ -117,19 +125,58 @@ export function deriveStandaloneQuarters(metrics: StoredMetric[]): DerivedMetric
     }
   }
 
+  // Remap non-subtractable metrics (balance sheet, EPS) from cumulative periods
+  // to their corresponding standalone quarter. H1 balance sheet → Q2, etc.
+  // Then remove the cumulative-period metrics so the dashboard only shows quarters.
+  const derivedQuarterSuffixes = new Set(
+    result.filter((m) => m.source === "derived").map((m) => m.period.split("-")[1])
+  );
+
+  for (const year of years) {
+    for (const [cumSuffix, quarterSuffix] of Object.entries(CUMULATIVE_TO_QUARTER)) {
+      const cumPeriod = `${year}-${cumSuffix}`;
+      const quarterPeriod = `${year}-${quarterSuffix}`;
+
+      // Only remap if we actually derived this quarter (confirms cumulative data was used)
+      if (!derivedQuarterSuffixes.has(quarterSuffix)) continue;
+
+      // Copy non-subtractable metrics from cumulative period to standalone quarter
+      const cumNonFlow = result.filter(
+        (m) => m.period === cumPeriod && !isSubtractable(m) && !NON_SUBTRACTABLE_METRICS.has(m.metricName)
+      );
+      for (const m of cumNonFlow) {
+        // Don't overwrite if quarter already has this metric
+        if (result.some((r) => r.period === quarterPeriod && r.metricName === m.metricName)) continue;
+        result.push({ ...m, period: quarterPeriod });
+      }
+    }
+  }
+
+  // Remove cumulative-period metrics where we have derived the standalone quarter
+  const cumulativePeriodsToHide = new Set<string>();
+  for (const year of years) {
+    for (const [cumSuffix, quarterSuffix] of Object.entries(CUMULATIVE_TO_QUARTER)) {
+      if (derivedQuarterSuffixes.has(quarterSuffix)) {
+        cumulativePeriodsToHide.add(`${year}-${cumSuffix}`);
+      }
+    }
+  }
+
+  const filtered = result.filter((m) => !cumulativePeriodsToHide.has(m.period));
+
   // Recompute margins for derived quarters
   const derivedPeriods = [...new Set(
-    result.filter((m) => m.source === "derived").map((m) => m.period)
+    filtered.filter((m) => m.source === "derived").map((m) => m.period)
   )];
 
   for (const period of derivedPeriods) {
-    const periodMetrics = result.filter((m) => m.period === period);
+    const periodMetrics = filtered.filter((m) => m.period === period);
     for (const ratio of MARGIN_RATIOS) {
       if (periodMetrics.some((m) => m.metricName === ratio.name)) continue;
       const num = periodMetrics.find((m) => m.metricName === ratio.numerator);
       const den = periodMetrics.find((m) => m.metricName === ratio.denominator);
       if (!num || !den || den.value === 0) continue;
-      result.push({
+      filtered.push({
         documentId: num.documentId,
         companyId: num.companyId,
         period,
@@ -150,5 +197,5 @@ export function deriveStandaloneQuarters(metrics: StoredMetric[]): DerivedMetric
     }
   }
 
-  return result;
+  return filtered;
 }

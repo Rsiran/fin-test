@@ -83,6 +83,9 @@ export function OverviewTab(_props: { companyId: Id<"companies"> }) {
     return m.unit === "%" ? `${m.value.toFixed(1)}%` : `${m.value.toLocaleString("nb-NO")} ${m.unit}`;
   };
 
+  // Detect the reporting currency from revenue metrics
+  const revenueUnit = typedMetrics.find((m) => m.metricName === "driftsinntekter" && m.unit !== "%")?.unit;
+
   const revenueData = periods.map((p) => ({
     period: p,
     value: typedMetrics.find((m) => m.metricName === "driftsinntekter" && m.period === p)?.value ?? 0,
@@ -113,12 +116,12 @@ export function OverviewTab(_props: { companyId: Id<"companies"> }) {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <RevenueChart data={revenueData} />
+        <RevenueChart data={revenueData} unit={revenueUnit} />
         <MarginsChart data={marginsData} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <CashflowChart data={cashflowData} />
+        <CashflowChart data={cashflowData} unit={revenueUnit} />
         <ComparisonTable metrics={metrics} />
       </div>
     </div>

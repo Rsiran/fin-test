@@ -13,7 +13,7 @@ function makeMetric(overrides: Partial<StoredMetric> & Pick<StoredMetric, "perio
 }
 
 describe("deriveStandaloneQuarters", () => {
-  it("derives Q2 from H1 and Q1", () => {
+  it("derives Q2 from H1 and Q1, hides H1", () => {
     const metrics = [
       makeMetric({ period: "2025-Q1", metricName: "driftsinntekter", value: 100 }),
       makeMetric({ period: "2025-H1", metricName: "driftsinntekter", value: 350 }),
@@ -24,9 +24,11 @@ describe("deriveStandaloneQuarters", () => {
     expect(q2!.value).toBe(250);
     expect(q2!.source).toBe("derived");
     expect(q2!.derivation?.formula).toBe("H1 - Q1");
+    // H1 should be hidden since Q2 was derived
+    expect(result.find((m) => m.period === "2025-H1")).toBeUndefined();
   });
 
-  it("derives Q3 from 9M and H1", () => {
+  it("derives Q3 from 9M and H1, hides 9M", () => {
     const metrics = [
       makeMetric({ period: "2025-H1", metricName: "driftsinntekter", value: 300 }),
       makeMetric({ period: "2025-9M", metricName: "driftsinntekter", value: 450 }),
@@ -35,9 +37,12 @@ describe("deriveStandaloneQuarters", () => {
     const q3 = result.find((m) => m.period === "2025-Q3" && m.metricName === "driftsinntekter");
     expect(q3).toBeDefined();
     expect(q3!.value).toBe(150);
+    // 9M hidden (Q3 derived), H1 stays (Q2 not derived — no Q1)
+    expect(result.find((m) => m.period === "2025-9M")).toBeUndefined();
+    expect(result.find((m) => m.period === "2025-H1")).toBeDefined();
   });
 
-  it("derives Q4 from FY and 9M", () => {
+  it("derives Q4 from FY and 9M, hides FY", () => {
     const metrics = [
       makeMetric({ period: "2025-9M", metricName: "driftsinntekter", value: 450 }),
       makeMetric({ period: "2025-FY", metricName: "driftsinntekter", value: 600 }),
@@ -46,6 +51,9 @@ describe("deriveStandaloneQuarters", () => {
     const q4 = result.find((m) => m.period === "2025-Q4" && m.metricName === "driftsinntekter");
     expect(q4).toBeDefined();
     expect(q4!.value).toBe(150);
+    // FY hidden (Q4 derived), 9M stays (Q3 not derived — no H1)
+    expect(result.find((m) => m.period === "2025-FY")).toBeUndefined();
+    expect(result.find((m) => m.period === "2025-9M")).toBeDefined();
   });
 
   it("does NOT derive if standalone already exists", () => {
@@ -133,6 +141,25 @@ describe("deriveStandaloneQuarters", () => {
     expect(q2!.value).toBe(217);
     expect(q3!.value).toBe(154);
     expect(q4!.value).toBe(147);
+    // Cumulative periods should be filtered out
+    expect(result.find((m) => m.period === "2025-H1")).toBeUndefined();
+    expect(result.find((m) => m.period === "2025-9M")).toBeUndefined();
+    expect(result.find((m) => m.period === "2025-FY")).toBeUndefined();
+  });
+
+  it("remaps balance sheet from cumulative to standalone quarter", () => {
+    const metrics = [
+      makeMetric({ period: "2025-Q1", metricName: "driftsinntekter", value: 100 }),
+      makeMetric({ period: "2025-H1", metricName: "driftsinntekter", value: 350 }),
+      makeMetric({ period: "2025-H1", metricName: "sum_eiendeler", value: 800, category: "balanse" }),
+    ];
+    const result = deriveStandaloneQuarters(metrics);
+    // H1 balance sheet should be remapped to Q2
+    const q2Assets = result.find((m) => m.period === "2025-Q2" && m.metricName === "sum_eiendeler");
+    expect(q2Assets).toBeDefined();
+    expect(q2Assets!.value).toBe(800);
+    // H1 period should be hidden
+    expect(result.find((m) => m.period === "2025-H1")).toBeUndefined();
   });
 
   it("passes through extracted metrics unchanged", () => {

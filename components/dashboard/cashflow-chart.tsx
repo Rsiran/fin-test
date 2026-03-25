@@ -13,6 +13,7 @@ interface CashflowChartProps {
     finansiering?: number;
     fcf?: number;
   }[];
+  unit?: string;
 }
 
 const GRID_STROKE = "rgba(255,255,255,0.06)";
@@ -25,11 +26,11 @@ const TOOLTIP_STYLE = {
   fontSize: "12px",
 };
 
-export function CashflowChart({ data }: CashflowChartProps) {
+export function CashflowChart({ data, unit }: CashflowChartProps) {
   return (
     <div className="bg-elevated rounded-card shadow-card p-5">
       <h3 className="text-[9px] font-sans uppercase tracking-[1px] text-[#666666] mb-4">
-        Kontantstrøm (MNOK)
+        Kontantstrøm ({unit || "MNOK"})
       </h3>
       <ResponsiveContainer width="100%" height={200}>
         <BarChart data={data}>
