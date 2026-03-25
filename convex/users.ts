@@ -14,10 +14,12 @@ export const meProfile = query({
     if (!userId) return null;
     const user = await ctx.db.get(userId);
     if (!user) return null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const doc = user as any;
     return {
-      name: user.name as string | undefined,
-      email: user.email as string | undefined,
-      nameConfirmed: (user.nameConfirmed as boolean) ?? false,
+      name: doc.name as string | undefined,
+      email: doc.email as string | undefined,
+      nameConfirmed: (doc.nameConfirmed as boolean) ?? false,
     };
   },
 });
@@ -37,6 +39,6 @@ export const setName = mutation({
     await ctx.db.patch(userId, {
       name: trimmed,
       nameConfirmed: true,
-    });
+    } as any);
   },
 });
