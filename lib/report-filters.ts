@@ -45,7 +45,7 @@ export function filterMetricsByDocuments<T extends { documentId: string; source?
 ): T[] {
   return metrics.filter((m) => {
     if (m.source === "derived" && m.derivation) {
-      return m.derivation.operands.some((op) => filteredDocIds.has(op.documentId));
+      return m.derivation.operands.every((op) => filteredDocIds.has(op.documentId));
     }
     return filteredDocIds.has(m.documentId);
   });
