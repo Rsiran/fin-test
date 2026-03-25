@@ -201,4 +201,23 @@ describe("deriveStandaloneQuarters", () => {
     expect(q2Margin!.value).toBe(24);
     expect(q2Margin!.source).toBe("derived");
   });
+
+  it("derived margin operands include upstream source documentIds", () => {
+    // Q4 margin is computed from Q4 revenue and Q4 profit, both derived from FY-9M.
+    // The margin's operands must include the 9M doc so filtering works correctly.
+    const metrics = [
+      makeMetric({ period: "2025-9M", metricName: "driftsinntekter", value: 450, documentId: "doc_9m" }),
+      makeMetric({ period: "2025-9M", metricName: "driftsresultat", value: 100, documentId: "doc_9m" }),
+      makeMetric({ period: "2025-FY", metricName: "driftsinntekter", value: 600, documentId: "doc_fy" }),
+      makeMetric({ period: "2025-FY", metricName: "driftsresultat", value: 150, documentId: "doc_fy" }),
+    ];
+    const result = deriveStandaloneQuarters(metrics);
+    const q4Margin = result.find((m) => m.period === "2025-Q4" && m.metricName === "driftsmargin");
+    expect(q4Margin).toBeDefined();
+    // Must reference both FY and 9M docs so the filter can exclude it
+    // when only annual reports are selected
+    const opDocIds = q4Margin!.derivation!.operands.map((o) => o.documentId);
+    expect(opDocIds).toContain("doc_fy");
+    expect(opDocIds).toContain("doc_9m");
+  });
 });

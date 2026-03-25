@@ -190,6 +190,24 @@ export function deriveStandaloneQuarters(metrics: StoredMetric[]): DerivedMetric
       const num = periodMetrics.find((m) => m.metricName === ratio.numerator);
       const den = periodMetrics.find((m) => m.metricName === ratio.denominator);
       if (!num || !den || den.value === 0) continue;
+      // Collect all upstream source documentIds so filtering works correctly.
+      // Without this, a Q4 margin derived from Q4 revenue (itself from FY-9M)
+      // would only reference the FY doc, passing filters that should exclude it.
+      const operands: { period: string; value: number; documentId: string }[] = [
+        { period, value: num.value, documentId: num.documentId },
+        { period, value: den.value, documentId: den.documentId },
+      ];
+      const seen = new Set(operands.map((o) => o.documentId));
+      for (const m of [num, den]) {
+        if (m.derivation) {
+          for (const op of m.derivation.operands) {
+            if (!seen.has(op.documentId)) {
+              seen.add(op.documentId);
+              operands.push(op);
+            }
+          }
+        }
+      }
       filtered.push({
         documentId: num.documentId,
         companyId: num.companyId,
@@ -202,10 +220,7 @@ export function deriveStandaloneQuarters(metrics: StoredMetric[]): DerivedMetric
         source: "derived",
         derivation: {
           formula: `${ratio.numerator} / ${ratio.denominator}`,
-          operands: [
-            { period, value: num.value, documentId: num.documentId },
-            { period, value: den.value, documentId: den.documentId },
-          ],
+          operands,
         },
       });
     }
