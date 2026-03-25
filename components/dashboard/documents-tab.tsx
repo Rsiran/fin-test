@@ -15,7 +15,7 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
   const currentUserId = useQuery(api.users.me);
   const [showDeleteAll, setShowDeleteAll] = useState(false);
 
-  const myDocuments = allDocuments?.filter((d: { uploadedBy?: string }) => d.uploadedBy === currentUserId);
+  const myDocuments = documents?.filter((d: { uploadedBy?: string }) => d.uploadedBy === currentUserId);
 
   const handleDeleteAll = async () => {
     if (!myDocuments) return;
