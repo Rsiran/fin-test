@@ -10,7 +10,7 @@ export function extractYear(period: string): string | null {
   return match ? match[1] : null;
 }
 
-export function getFilterOptions(documents: DocumentLike[]): {
+export function getFilterOptions<T extends DocumentLike>(documents: T[]): {
   types: string[];
   years: string[];
 } {
@@ -26,11 +26,11 @@ export function getFilterOptions(documents: DocumentLike[]): {
   return { types, years };
 }
 
-export function filterDocuments(
-  documents: DocumentLike[],
+export function filterDocuments<T extends DocumentLike>(
+  documents: T[],
   selectedTypes: string[],
   selectedYears: string[],
-): DocumentLike[] {
+): T[] {
   return documents.filter((d) => {
     if (selectedTypes.length > 0 && !selectedTypes.includes(d.reportType)) return false;
     const year = extractYear(d.period);
@@ -39,16 +39,16 @@ export function filterDocuments(
   });
 }
 
-export function filterMetricsByDocuments(
-  metrics: { documentId: string }[],
+export function filterMetricsByDocuments<T extends { documentId: string }>(
+  metrics: T[],
   filteredDocIds: Set<string>,
-): typeof metrics {
+): T[] {
   return metrics.filter((m) => filteredDocIds.has(m.documentId));
 }
 
-export function getReadyCounts(
-  allDocuments: DocumentLike[],
-  filteredDocuments: DocumentLike[],
+export function getReadyCounts<T extends DocumentLike>(
+  allDocuments: T[],
+  filteredDocuments: T[],
 ): { total: number; filtered: number } {
   const total = allDocuments.filter((d) => d.status === "ready").length;
   const filtered = filteredDocuments.filter((d) => d.status === "ready").length;

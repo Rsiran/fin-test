@@ -13,7 +13,7 @@ import {
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
+import { Id, Doc } from "@/convex/_generated/dataModel";
 import {
   getFilterOptions,
   filterDocuments,
@@ -27,9 +27,9 @@ interface ReportFilterContextValue {
   toggleType: (type: string) => void;
   toggleYear: (year: string) => void;
   resetFilters: () => void;
-  allDocuments: any[] | undefined;
-  filteredDocuments: any[] | undefined;
-  filteredMetrics: any[] | undefined;
+  allDocuments: Doc<"documents">[] | undefined;
+  filteredDocuments: Doc<"documents">[] | undefined;
+  filteredMetrics: Doc<"financialMetrics">[] | undefined;
   filterOptions: { types: string[]; years: string[] };
   totalCount: number;
   filteredCount: number;
@@ -120,7 +120,7 @@ export function ReportFilterProvider({
   const isLoading = documents === undefined || metrics === undefined;
 
   const filterOpts = useMemo(
-    () => (documents ? getFilterOptions(documents as any) : { types: [], years: [] }),
+    () => (documents ? getFilterOptions(documents) : { types: [], years: [] }),
     [documents],
   );
 
@@ -187,7 +187,7 @@ export function ReportFilterProvider({
   const filteredDocs = useMemo(
     () =>
       documents
-        ? filterDocuments(documents as any, selectedTypes, selectedYears)
+        ? filterDocuments(documents, selectedTypes, selectedYears)
         : undefined,
     [documents, selectedTypes, selectedYears],
   );
@@ -196,15 +196,15 @@ export function ReportFilterProvider({
     if (!metrics || !filteredDocs) return undefined;
     if (selectedTypes.length === 0 && selectedYears.length === 0) return metrics;
     const readyDocIds = new Set(
-      filteredDocs.filter((d: any) => d.status === "ready").map((d: any) => d._id),
+      filteredDocs.filter((d) => d.status === "ready").map((d) => d._id),
     );
-    return filterMetricsByDocuments(metrics as any, readyDocIds as any);
+    return filterMetricsByDocuments(metrics, readyDocIds);
   }, [metrics, filteredDocs, selectedTypes, selectedYears]);
 
   const counts = useMemo(
     () =>
       documents && filteredDocs
-        ? getReadyCounts(documents as any, filteredDocs as any)
+        ? getReadyCounts(documents, filteredDocs)
         : { total: 0, filtered: 0 },
     [documents, filteredDocs],
   );
