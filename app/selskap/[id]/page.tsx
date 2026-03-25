@@ -5,6 +5,8 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { DashboardTabs } from "@/components/dashboard/tabs";
+import { ReportFilterProvider } from "@/components/dashboard/report-filter-context";
+import { ReportFilterBar } from "@/components/dashboard/report-filter-bar";
 import Link from "next/link";
 import { CaretLeft } from "@phosphor-icons/react";
 
@@ -49,7 +51,10 @@ export default function CompanyPage() {
         </div>
       </div>
 
-      <DashboardTabs companyId={companyId} />
+      <ReportFilterProvider companyId={companyId}>
+        <ReportFilterBar />
+        <DashboardTabs companyId={companyId} />
+      </ReportFilterProvider>
     </main>
   );
 }
