@@ -55,10 +55,11 @@ export function NameRegistrationModal() {
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-[9px] font-sans uppercase tracking-[1px] text-[#666666] mb-1.5">
+            <label htmlFor="fornavn-input" className="block text-[9px] font-sans uppercase tracking-[1px] text-[#666666] mb-1.5">
               Fornavn
             </label>
             <input
+              id="fornavn-input"
               type="text"
               value={name}
               onChange={(e) => {

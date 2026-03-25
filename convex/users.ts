@@ -14,6 +14,7 @@ export const meProfile = query({
     if (!userId) return null;
     const user = await ctx.db.get(userId);
     if (!user) return null;
+    // TODO: Extend users table in schema.ts with nameConfirmed to remove this cast
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const doc = user as any;
     return {
@@ -36,6 +37,7 @@ export const setName = mutation({
     if (trimmed.length === 0) throw new Error("Name cannot be empty");
     if (trimmed.length > 50) throw new Error("Name too long");
 
+    // TODO: Remove cast when nameConfirmed is added to schema
     await ctx.db.patch(userId, {
       name: trimmed,
       nameConfirmed: true,
