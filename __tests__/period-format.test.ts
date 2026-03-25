@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { canonicalizePeriod, periodToFileName } from "../lib/period-format";
+import { canonicalizePeriod, periodToFileName, sortPeriods } from "../lib/period-format";
 
 describe("canonicalizePeriod", () => {
   it("parses quarterly formats", () => {
@@ -19,6 +19,12 @@ describe("canonicalizePeriod", () => {
   it("parses half-year formats", () => {
     expect(canonicalizePeriod("H1 2025")).toBe("2025-H1");
     expect(canonicalizePeriod("halvårsrapport 2025")).toBe("2025-H1");
+  });
+
+  it("parses nine-month formats", () => {
+    expect(canonicalizePeriod("9M 2025")).toBe("2025-9M");
+    expect(canonicalizePeriod("9m 2025")).toBe("2025-9M");
+    expect(canonicalizePeriod("9M2025")).toBe("2025-9M");
   });
 
   it("returns input unchanged if unrecognized", () => {
@@ -44,6 +50,11 @@ describe("periodToFileName", () => {
     expect(periodToFileName("2024-H2")).toBe("H224");
   });
 
+  it("converts nine-month periods", () => {
+    expect(periodToFileName("2025-9M")).toBe("9M25");
+    expect(periodToFileName("2024-9M")).toBe("9M24");
+  });
+
   it("returns null for unrecognized formats", () => {
     expect(periodToFileName("unknown")).toBeNull();
     expect(periodToFileName("2024")).toBeNull();
@@ -54,5 +65,32 @@ describe("periodToFileName", () => {
     expect(periodToFileName(canonicalizePeriod("Q2 2024"))).toBe("2Q24");
     expect(periodToFileName(canonicalizePeriod("Årsrapport 2024"))).toBe("AR24");
     expect(periodToFileName(canonicalizePeriod("H1 2025"))).toBe("H125");
+  });
+
+  it("round-trips 9M through canonicalizePeriod", () => {
+    expect(periodToFileName(canonicalizePeriod("9M 2025"))).toBe("9M25");
+  });
+});
+
+describe("sortPeriods", () => {
+  it("sorts periods in chronological order", () => {
+    const input = ["2025-FY", "2025-Q1", "2025-9M", "2025-H1", "2025-Q3"];
+    expect(sortPeriods(input)).toEqual([
+      "2025-Q1", "2025-H1", "2025-Q3", "2025-9M", "2025-FY",
+    ]);
+  });
+
+  it("sorts across years", () => {
+    const input = ["2025-Q1", "2024-FY", "2024-Q3", "2025-H1"];
+    expect(sortPeriods(input)).toEqual([
+      "2024-Q3", "2024-FY", "2025-Q1", "2025-H1",
+    ]);
+  });
+
+  it("handles Q2 and Q4 in the order", () => {
+    const input = ["2025-Q4", "2025-Q2", "2025-Q1", "2025-Q3"];
+    expect(sortPeriods(input)).toEqual([
+      "2025-Q1", "2025-Q2", "2025-Q3", "2025-Q4",
+    ]);
   });
 });
