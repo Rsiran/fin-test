@@ -18,6 +18,8 @@ import type * as cleanupActions from "../cleanupActions.js";
 import type * as companies from "../companies.js";
 import type * as crons from "../crons.js";
 import type * as documents from "../documents.js";
+import type * as feedback from "../feedback.js";
+import type * as feedbackActions from "../feedbackActions.js";
 import type * as financialMetrics from "../financialMetrics.js";
 import type * as http from "../http.js";
 import type * as users from "../users.js";
@@ -40,6 +42,8 @@ declare const fullApi: ApiFromModules<{
   companies: typeof companies;
   crons: typeof crons;
   documents: typeof documents;
+  feedback: typeof feedback;
+  feedbackActions: typeof feedbackActions;
   financialMetrics: typeof financialMetrics;
   http: typeof http;
   users: typeof users;

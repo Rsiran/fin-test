@@ -1,8 +1,7 @@
 "use client";
 
-import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
+import { useReportFilter } from "./report-filter-context";
 import { KpiCard } from "./kpi-card";
 import { RevenueChart } from "./revenue-chart";
 import { MarginsChart } from "./margins-chart";
@@ -18,7 +17,7 @@ interface Metric {
 }
 
 export function OverviewTab({ companyId }: { companyId: Id<"companies"> }) {
-  const metrics = useQuery(api.financialMetrics.getByCompany, { companyId });
+  const { filteredMetrics: metrics, isFiltered, resetFilters } = useReportFilter();
 
   if (metrics === undefined) {
     return (
@@ -39,7 +38,16 @@ export function OverviewTab({ companyId }: { companyId: Id<"companies"> }) {
       <div>
         <h2 className="text-lg font-semibold mb-4">Oversikt</h2>
         <p className="text-sm text-[#666666]">
-          Last opp rapporter under Dokumenter-fanen for å se finansielle nøkkeltall.
+          {isFiltered ? (
+            <>
+              Ingen nøkkeltall matcher filteret.{" "}
+              <button onClick={resetFilters} className="text-accent hover:text-accent/80 transition-colors duration-150">
+                Nullstill filter
+              </button>
+            </>
+          ) : (
+            "Last opp rapporter under Dokumenter-fanen for å se finansielle nøkkeltall."
+          )}
         </p>
       </div>
     );
