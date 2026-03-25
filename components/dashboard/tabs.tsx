@@ -8,6 +8,7 @@ import { OverviewTab } from "./overview-tab";
 import { ChatTab } from "./chat-tab";
 import { UploadProvider } from "../upload-context";
 import { ChartBar, FileText, ChatCircle } from "@phosphor-icons/react";
+import { ReportFilterBar } from "./report-filter-bar";
 
 const TABS = [
   { id: "oversikt", label: "Oversikt", icon: ChartBar },
@@ -56,6 +57,7 @@ export function DashboardTabs({ companyId }: { companyId: Id<"companies"> }) {
         })}
       </div>
 
+      {activeTab === "oversikt" && <ReportFilterBar />}
       <UploadProvider companyId={companyId}>
         <div className="p-8 max-w-7xl mx-auto">
           {activeTab === "oversikt" && <OverviewTab companyId={companyId} />}
