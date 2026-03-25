@@ -9,6 +9,7 @@ import { ReportFilterProvider } from "@/components/dashboard/report-filter-conte
 
 import Link from "next/link";
 import { CaretLeft } from "@phosphor-icons/react";
+import { LogoutButton } from "@/components/logout-button";
 
 export default function CompanyPage() {
   const params = useParams();
@@ -41,7 +42,7 @@ export default function CompanyPage() {
         >
           <CaretLeft size={18} />
         </Link>
-        <div className="flex items-center gap-2">
+        <div className="flex-1 flex items-center gap-2">
           <span className="text-sm font-semibold">{company.name}</span>
           {company.ticker && (
             <span className="text-[11px] font-mono text-[#666666]">
@@ -49,6 +50,7 @@ export default function CompanyPage() {
             </span>
           )}
         </div>
+        <LogoutButton />
       </div>
 
       <ReportFilterProvider companyId={companyId}>

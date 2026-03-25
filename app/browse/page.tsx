@@ -8,6 +8,7 @@ import { SearchBar } from "@/components/browse/search-bar";
 import { CompanyBrowseCard } from "@/components/browse/company-browse-card";
 import { CaretLeft } from "@phosphor-icons/react";
 import Link from "next/link";
+import { LogoutButton } from "@/components/logout-button";
 
 export default function BrowsePage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -33,12 +34,13 @@ export default function BrowsePage() {
         >
           <CaretLeft size={18} />
         </Link>
-        <div>
+        <div className="flex-1">
           <h1 className="text-2xl font-bold font-sans">Utforsk selskaper</h1>
           <p className="mt-1 text-sm text-[#AAAAAA]">
             Søk i databasen og legg til selskaper i din oversikt
           </p>
         </div>
+        <LogoutButton />
       </div>
 
       <div className="mb-6">
