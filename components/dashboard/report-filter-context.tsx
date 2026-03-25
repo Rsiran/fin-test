@@ -22,10 +22,10 @@ import {
 } from "@/lib/report-filters";
 
 interface ReportFilterContextValue {
-  selectedType: string | null;
-  selectedYear: string | null;
-  setType: (type: string | null) => void;
-  setYear: (year: string | null) => void;
+  selectedTypes: string[];
+  selectedYears: string[];
+  toggleType: (type: string) => void;
+  toggleYear: (year: string) => void;
   resetFilters: () => void;
   allDocuments: any[] | undefined;
   filteredDocuments: any[] | undefined;
@@ -42,27 +42,47 @@ const ReportFilterContext = createContext<ReportFilterContextValue | null>(null)
 const STORAGE_PREFIX = "filters:";
 
 function readStorage(companyId: string): {
-  type: string | null;
-  year: string | null;
+  types: string[];
+  years: string[];
 } {
   try {
     const raw = localStorage.getItem(`${STORAGE_PREFIX}${companyId}`);
-    if (!raw) return { type: null, year: null };
-    return JSON.parse(raw);
+    if (!raw) return { types: [], years: [] };
+    const parsed = JSON.parse(raw);
+    // Migration: handle old single-value format
+    if ("type" in parsed) {
+      return {
+        types: parsed.type ? [parsed.type] : [],
+        years: parsed.year ? [parsed.year] : [],
+      };
+    }
+    return {
+      types: Array.isArray(parsed.types) ? parsed.types : [],
+      years: Array.isArray(parsed.years) ? parsed.years : [],
+    };
   } catch {
-    return { type: null, year: null };
+    return { types: [], years: [] };
   }
 }
 
 function writeStorage(
   companyId: string,
-  type: string | null,
-  year: string | null,
+  types: string[],
+  years: string[],
 ) {
   localStorage.setItem(
     `${STORAGE_PREFIX}${companyId}`,
-    JSON.stringify({ type, year }),
+    JSON.stringify({ types, years }),
   );
+}
+
+function parseUrlArray(param: string | null): string[] {
+  if (!param) return [];
+  return param.split(",").filter(Boolean);
+}
+
+function toUrlParam(values: string[]): string | null {
+  return values.length > 0 ? values.join(",") : null;
 }
 
 export function ReportFilterProvider({
@@ -76,24 +96,24 @@ export function ReportFilterProvider({
   const router = useRouter();
   const pathname = usePathname();
 
-  const [selectedType, setSelectedType] = useState<string | null>(() => {
-    const urlType = searchParams.get("type");
-    if (urlType) return urlType;
-    if (typeof window !== "undefined") return readStorage(companyId).type;
-    return null;
+  const [selectedTypes, setSelectedTypes] = useState<string[]>(() => {
+    const urlTypes = parseUrlArray(searchParams.get("type"));
+    if (urlTypes.length > 0) return urlTypes;
+    if (typeof window !== "undefined") return readStorage(companyId).types;
+    return [];
   });
 
-  const [selectedYear, setSelectedYear] = useState<string | null>(() => {
-    const urlYear = searchParams.get("year");
-    if (urlYear) return urlYear;
-    if (typeof window !== "undefined") return readStorage(companyId).year;
-    return null;
+  const [selectedYears, setSelectedYears] = useState<string[]>(() => {
+    const urlYears = parseUrlArray(searchParams.get("year"));
+    if (urlYears.length > 0) return urlYears;
+    if (typeof window !== "undefined") return readStorage(companyId).years;
+    return [];
   });
 
-  const typeRef = useRef(selectedType);
-  typeRef.current = selectedType;
-  const yearRef = useRef(selectedYear);
-  yearRef.current = selectedYear;
+  const typesRef = useRef(selectedTypes);
+  typesRef.current = selectedTypes;
+  const yearsRef = useRef(selectedYears);
+  yearsRef.current = selectedYears;
 
   const documents = useQuery(api.documents.listByCompany, { companyId });
   const metrics = useQuery(api.financialMetrics.getByCompany, { companyId });
@@ -105,12 +125,14 @@ export function ReportFilterProvider({
   );
 
   const syncState = useCallback(
-    (type: string | null, year: string | null) => {
-      writeStorage(companyId, type, year);
+    (types: string[], years: string[]) => {
+      writeStorage(companyId, types, years);
       const params = new URLSearchParams(searchParams.toString());
-      if (type) params.set("type", type);
+      const typeParam = toUrlParam(types);
+      if (typeParam) params.set("type", typeParam);
       else params.delete("type");
-      if (year) params.set("year", year);
+      const yearParam = toUrlParam(years);
+      if (yearParam) params.set("year", yearParam);
       else params.delete("year");
       const qs = params.toString();
       router.replace(`${pathname}${qs ? `?${qs}` : ""}`, { scroll: false });
@@ -118,61 +140,66 @@ export function ReportFilterProvider({
     [companyId, searchParams, router, pathname],
   );
 
+  // Validate: remove any selected values that no longer exist in options
   useEffect(() => {
     if (!documents) return;
-    let newType = selectedType;
-    let newYear = selectedYear;
-    if (selectedType && !filterOpts.types.includes(selectedType)) {
-      newType = null;
-      setSelectedType(null);
+    const validTypes = selectedTypes.filter((t) => filterOpts.types.includes(t));
+    const validYears = selectedYears.filter((y) => filterOpts.years.includes(y));
+    const typesChanged = validTypes.length !== selectedTypes.length;
+    const yearsChanged = validYears.length !== selectedYears.length;
+    if (typesChanged || yearsChanged) {
+      setSelectedTypes(validTypes);
+      setSelectedYears(validYears);
+      syncState(validTypes, validYears);
     }
-    if (selectedYear && !filterOpts.years.includes(selectedYear)) {
-      newYear = null;
-      setSelectedYear(null);
-    }
-    if (newType !== selectedType || newYear !== selectedYear) {
-      syncState(newType, newYear);
-    }
-  }, [filterOpts, selectedType, selectedYear, documents, syncState]);
+  }, [filterOpts, selectedTypes, selectedYears, documents, syncState]);
 
-  const setType = useCallback(
-    (type: string | null) => {
-      setSelectedType(type);
-      syncState(type, yearRef.current);
+  const toggleType = useCallback(
+    (type: string) => {
+      const current = typesRef.current;
+      const next = current.includes(type)
+        ? current.filter((t) => t !== type)
+        : [...current, type];
+      setSelectedTypes(next);
+      syncState(next, yearsRef.current);
     },
     [syncState],
   );
 
-  const setYear = useCallback(
-    (year: string | null) => {
-      setSelectedYear(year);
-      syncState(typeRef.current, year);
+  const toggleYear = useCallback(
+    (year: string) => {
+      const current = yearsRef.current;
+      const next = current.includes(year)
+        ? current.filter((y) => y !== year)
+        : [...current, year];
+      setSelectedYears(next);
+      syncState(typesRef.current, next);
     },
     [syncState],
   );
 
   const resetFilters = useCallback(() => {
-    setSelectedType(null);
-    setSelectedYear(null);
-    syncState(null, null);
+    setSelectedTypes([]);
+    setSelectedYears([]);
+    syncState([], []);
   }, [syncState]);
 
   const filteredDocs = useMemo(
     () =>
       documents
-        ? filterDocuments(documents as any, selectedType, selectedYear)
+        ? filterDocuments(documents as any, selectedTypes, selectedYears)
         : undefined,
-    [documents, selectedType, selectedYear],
+    [documents, selectedTypes, selectedYears],
   );
 
   const filteredMets = useMemo(() => {
     if (!metrics || !filteredDocs) return undefined;
-    if (!selectedType && !selectedYear) return metrics;
+    if (selectedTypes.length === 0 && selectedYears.length === 0) return metrics;
     const readyDocIds = new Set(
       filteredDocs.filter((d: any) => d.status === "ready").map((d: any) => d._id),
     );
     return filterMetricsByDocuments(metrics as any, readyDocIds as any);
-  }, [metrics, filteredDocs, selectedType, selectedYear]);
+  }, [metrics, filteredDocs, selectedTypes, selectedYears]);
 
   const counts = useMemo(
     () =>
@@ -182,14 +209,14 @@ export function ReportFilterProvider({
     [documents, filteredDocs],
   );
 
-  const isFiltered = selectedType !== null || selectedYear !== null;
+  const isFiltered = selectedTypes.length > 0 || selectedYears.length > 0;
 
   const value = useMemo(
     () => ({
-      selectedType,
-      selectedYear,
-      setType,
-      setYear,
+      selectedTypes,
+      selectedYears,
+      toggleType,
+      toggleYear,
       resetFilters,
       allDocuments: documents,
       filteredDocuments: filteredDocs,
@@ -201,10 +228,10 @@ export function ReportFilterProvider({
       isLoading,
     }),
     [
-      selectedType,
-      selectedYear,
-      setType,
-      setYear,
+      selectedTypes,
+      selectedYears,
+      toggleType,
+      toggleYear,
       resetFilters,
       documents,
       filteredDocs,

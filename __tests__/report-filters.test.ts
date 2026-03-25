@@ -50,27 +50,37 @@ describe("filterDocuments", () => {
   ];
 
   it("returns all docs when no filters active", () => {
-    expect(filterDocuments(docs as any, null, null)).toHaveLength(4);
+    expect(filterDocuments(docs as any, [], [])).toHaveLength(4);
   });
 
-  it("filters by type", () => {
-    const result = filterDocuments(docs as any, "årsrapport", null);
+  it("filters by single type", () => {
+    const result = filterDocuments(docs as any, ["årsrapport"], []);
     expect(result).toHaveLength(1);
     expect(result[0]._id).toBe("2");
   });
 
-  it("filters by year", () => {
-    const result = filterDocuments(docs as any, null, "2025");
+  it("filters by multiple types", () => {
+    const result = filterDocuments(docs as any, ["årsrapport", "kvartalsrapport"], []);
+    expect(result).toHaveLength(4);
+  });
+
+  it("filters by single year", () => {
+    const result = filterDocuments(docs as any, [], ["2025"]);
     expect(result).toHaveLength(2);
   });
 
+  it("filters by multiple years", () => {
+    const result = filterDocuments(docs as any, [], ["2024", "2025"]);
+    expect(result).toHaveLength(4);
+  });
+
   it("filters by type AND year", () => {
-    const result = filterDocuments(docs as any, "kvartalsrapport", "2025");
+    const result = filterDocuments(docs as any, ["kvartalsrapport"], ["2025"]);
     expect(result).toHaveLength(2);
   });
 
   it("includes non-ready docs that match filters", () => {
-    const result = filterDocuments(docs as any, "kvartalsrapport", "2025");
+    const result = filterDocuments(docs as any, ["kvartalsrapport"], ["2025"]);
     expect(result.some((d: any) => d.status === "processing")).toBe(true);
   });
 });

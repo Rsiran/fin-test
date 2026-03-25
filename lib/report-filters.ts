@@ -28,12 +28,13 @@ export function getFilterOptions(documents: DocumentLike[]): {
 
 export function filterDocuments(
   documents: DocumentLike[],
-  selectedType: string | null,
-  selectedYear: string | null,
+  selectedTypes: string[],
+  selectedYears: string[],
 ): DocumentLike[] {
   return documents.filter((d) => {
-    if (selectedType && d.reportType !== selectedType) return false;
-    if (selectedYear && extractYear(d.period) !== selectedYear) return false;
+    if (selectedTypes.length > 0 && !selectedTypes.includes(d.reportType)) return false;
+    const year = extractYear(d.period);
+    if (selectedYears.length > 0 && (!year || !selectedYears.includes(year))) return false;
     return true;
   });
 }
