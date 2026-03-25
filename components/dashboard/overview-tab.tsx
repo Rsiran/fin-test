@@ -14,6 +14,7 @@ interface Metric {
   period: string;
   value: number;
   unit: string;
+  source?: "extracted" | "derived";
 }
 
 export function OverviewTab({ companyId }: { companyId: Id<"companies"> }) {
@@ -73,6 +74,9 @@ export function OverviewTab({ companyId }: { companyId: Id<"companies"> }) {
     };
   };
 
+  const isDerived = (name: string) =>
+    typedMetrics.find((m) => m.metricName === name && m.period === latestPeriod)?.source === "derived";
+
   const formatValue = (name: string) => {
     const m = getLatest(name);
     if (!m) return "—";
@@ -102,10 +106,10 @@ export function OverviewTab({ companyId }: { companyId: Id<"companies"> }) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard label="Driftsinntekter" value={formatValue("driftsinntekter")} change={calcChange("driftsinntekter")} />
-        <KpiCard label="EBITDA" value={formatValue("ebitda")} change={calcChange("ebitda")} />
-        <KpiCard label="Fri kontantstrøm" value={formatValue("fri_kontantstrom")} change={calcChange("fri_kontantstrom")} />
-        <KpiCard label="Driftsmargin" value={formatValue("driftsmargin")} change={calcChange("driftsmargin")} />
+        <KpiCard label="Driftsinntekter" value={formatValue("driftsinntekter")} change={calcChange("driftsinntekter")} derived={isDerived("driftsinntekter")} />
+        <KpiCard label="EBITDA" value={formatValue("ebitda")} change={calcChange("ebitda")} derived={isDerived("ebitda")} />
+        <KpiCard label="Fri kontantstrøm" value={formatValue("fri_kontantstrom")} change={calcChange("fri_kontantstrom")} derived={isDerived("fri_kontantstrom")} />
+        <KpiCard label="Driftsmargin" value={formatValue("driftsmargin")} change={calcChange("driftsmargin")} derived={isDerived("driftsmargin")} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
