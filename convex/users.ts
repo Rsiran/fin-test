@@ -1,4 +1,5 @@
-import { query } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
+import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
 export const me = query({
@@ -18,5 +19,24 @@ export const meProfile = query({
       email: user.email as string | undefined,
       nameConfirmed: (user.nameConfirmed as boolean) ?? false,
     };
+  },
+});
+
+export const setName = mutation({
+  args: {
+    name: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const trimmed = args.name.trim();
+    if (trimmed.length === 0) throw new Error("Name cannot be empty");
+    if (trimmed.length > 50) throw new Error("Name too long");
+
+    await ctx.db.patch(userId, {
+      name: trimmed,
+      nameConfirmed: true,
+    });
   },
 });
