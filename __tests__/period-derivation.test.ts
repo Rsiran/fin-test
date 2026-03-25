@@ -99,6 +99,16 @@ describe("deriveStandaloneQuarters", () => {
     expect(q2).toBeUndefined();
   });
 
+  it("skips derivation when result would be negative for revenue", () => {
+    const metrics = [
+      makeMetric({ period: "2025-Q1", metricName: "driftsinntekter", value: 400 }),
+      makeMetric({ period: "2025-H1", metricName: "driftsinntekter", value: 300 }),
+    ];
+    const result = deriveStandaloneQuarters(metrics);
+    const q2 = result.find((m) => m.period === "2025-Q2" && m.metricName === "driftsinntekter");
+    expect(q2).toBeUndefined();
+  });
+
   it("refuses to derive when units don't match", () => {
     const metrics = [
       makeMetric({ period: "2025-Q1", metricName: "driftsinntekter", value: 100, unit: "MNOK" }),

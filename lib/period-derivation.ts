@@ -27,6 +27,9 @@ const SUBTRACTABLE_CATEGORIES = new Set(["resultat", "kontantstrøm"]);
 // Metrics that are NOT subtractable even within subtractable categories
 const NON_SUBTRACTABLE_METRICS = new Set(["resultat_per_aksje"]);
 
+// Metrics that should never be negative (flags extraction errors upstream)
+const NON_NEGATIVE_METRICS = new Set(["driftsinntekter"]);
+
 // Derivation rules: [target standalone quarter, cumulative period, subtract period, formula label]
 const DERIVATION_RULES: [string, string, string, string][] = [
   ["Q2", "H1", "Q1", "H1 - Q1"],
@@ -82,6 +85,15 @@ export function deriveStandaloneQuarters(metrics: StoredMetric[]): DerivedMetric
         if (cumMetric.unit !== subMetric.unit) continue;
 
         const derivedValue = Math.round((cumMetric.value - subMetric.value) * 1000) / 1000;
+
+        // Flag negative values for normally-positive metrics (likely extraction error)
+        if (NON_NEGATIVE_METRICS.has(metricName) && derivedValue < 0) {
+          console.warn(
+            `DERIVATION WARNING: ${targetPeriod} ${metricName} = ${derivedValue} (negative). ` +
+            `${cumSuffix}=${cumMetric.value} - ${subSuffix}=${subMetric.value}. Skipping.`
+          );
+          continue;
+        }
 
         result.push({
           documentId: cumMetric.documentId,
