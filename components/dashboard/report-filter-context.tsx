@@ -20,7 +20,7 @@ import {
   filterMetricsByDocuments,
   getReadyCounts,
 } from "@/lib/report-filters";
-import { deriveStandaloneQuarters } from "@/lib/period-derivation";
+import { deriveStandaloneQuarters, type StoredMetric } from "@/lib/period-derivation";
 
 interface ReportFilterContextValue {
   selectedTypes: string[];
@@ -121,7 +121,7 @@ export function ReportFilterProvider({
 
   const enrichedMetrics = useMemo(() => {
     if (!metrics) return undefined;
-    return deriveStandaloneQuarters(metrics as any);
+    return deriveStandaloneQuarters(metrics as unknown as StoredMetric[]);
   }, [metrics]);
 
   const isLoading = documents === undefined || metrics === undefined;
@@ -205,7 +205,7 @@ export function ReportFilterProvider({
     const readyDocIds = new Set(
       filteredDocs.filter((d) => d.status === "ready").map((d) => d._id),
     );
-    return filterMetricsByDocuments(enrichedMetrics as any, readyDocIds);
+    return filterMetricsByDocuments(enrichedMetrics, readyDocIds);
   }, [enrichedMetrics, filteredDocs, selectedTypes, selectedYears]);
 
   const counts = useMemo(

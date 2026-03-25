@@ -17,7 +17,7 @@ interface Metric {
   source?: "extracted" | "derived";
 }
 
-export function OverviewTab({ companyId }: { companyId: Id<"companies"> }) {
+export function OverviewTab(_props: { companyId: Id<"companies"> }) {
   const { filteredMetrics: metrics, isFiltered, resetFilters } = useReportFilter();
 
   if (metrics === undefined) {
