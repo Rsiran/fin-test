@@ -12,9 +12,8 @@ export function NameRegistrationModal() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // Pre-fill with current name once loaded
+  // Mark as initialized once profile loads (don't pre-fill with email prefix)
   if (profile && !initialized) {
-    setNameValue(profile.name ?? "");
     setInitialized(true);
   }
 
