@@ -128,17 +128,28 @@ export function deriveStandaloneQuarters(metrics: StoredMetric[]): DerivedMetric
   // Remap non-subtractable metrics (balance sheet, EPS) from cumulative periods
   // to their corresponding standalone quarter. H1 balance sheet → Q2, etc.
   // Then remove the cumulative-period metrics so the dashboard only shows quarters.
-  const derivedQuarterSuffixes = new Set(
-    result.filter((m) => m.source === "derived").map((m) => m.period.split("-")[1])
-  );
+  // Track derived quarter suffixes PER YEAR so we only hide cumulative periods
+  // in years where derivation actually occurred.
+  const derivedQuartersByYear = new Map<string, Set<string>>();
+  for (const m of result) {
+    if (m.source !== "derived") continue;
+    const year = extractYear(m.period);
+    const suffix = m.period.split("-")[1];
+    if (!year) continue;
+    if (!derivedQuartersByYear.has(year)) derivedQuartersByYear.set(year, new Set());
+    derivedQuartersByYear.get(year)!.add(suffix);
+  }
 
   for (const year of years) {
+    const yearDerived = derivedQuartersByYear.get(year);
+    if (!yearDerived) continue;
+
     for (const [cumSuffix, quarterSuffix] of Object.entries(CUMULATIVE_TO_QUARTER)) {
       const cumPeriod = `${year}-${cumSuffix}`;
       const quarterPeriod = `${year}-${quarterSuffix}`;
 
-      // Only remap if we actually derived this quarter (confirms cumulative data was used)
-      if (!derivedQuarterSuffixes.has(quarterSuffix)) continue;
+      // Only remap if we actually derived this quarter IN THIS YEAR
+      if (!yearDerived.has(quarterSuffix)) continue;
 
       // Copy non-subtractable metrics from cumulative period to standalone quarter
       const cumNonFlow = result.filter(
@@ -152,11 +163,13 @@ export function deriveStandaloneQuarters(metrics: StoredMetric[]): DerivedMetric
     }
   }
 
-  // Remove cumulative-period metrics where we have derived the standalone quarter
+  // Remove cumulative-period metrics only in years where we derived the standalone quarter
   const cumulativePeriodsToHide = new Set<string>();
   for (const year of years) {
+    const yearDerived = derivedQuartersByYear.get(year);
+    if (!yearDerived) continue;
     for (const [cumSuffix, quarterSuffix] of Object.entries(CUMULATIVE_TO_QUARTER)) {
-      if (derivedQuarterSuffixes.has(quarterSuffix)) {
+      if (yearDerived.has(quarterSuffix)) {
         cumulativePeriodsToHide.add(`${year}-${cumSuffix}`);
       }
     }

@@ -162,6 +162,24 @@ describe("deriveStandaloneQuarters", () => {
     expect(result.find((m) => m.period === "2025-H1")).toBeUndefined();
   });
 
+  it("does NOT hide FY for years without quarterly derivation", () => {
+    // 2024 has quarterly data → Q4 derived, FY hidden for 2024
+    // 2023 has only an annual report (FY) → FY must remain visible
+    const metrics = [
+      makeMetric({ period: "2024-9M", metricName: "driftsinntekter", value: 450 }),
+      makeMetric({ period: "2024-FY", metricName: "driftsinntekter", value: 600 }),
+      makeMetric({ period: "2023-FY", metricName: "driftsinntekter", value: 500 }),
+    ];
+    const result = deriveStandaloneQuarters(metrics);
+    // 2024: Q4 derived, FY hidden
+    expect(result.find((m) => m.period === "2024-Q4" && m.metricName === "driftsinntekter")).toBeDefined();
+    expect(result.find((m) => m.period === "2024-FY")).toBeUndefined();
+    // 2023: FY must stay — no quarterly data to derive from
+    const fy2023 = result.find((m) => m.period === "2023-FY" && m.metricName === "driftsinntekter");
+    expect(fy2023).toBeDefined();
+    expect(fy2023!.value).toBe(500);
+  });
+
   it("passes through extracted metrics unchanged", () => {
     const metrics = [
       makeMetric({ period: "2025-Q1", metricName: "driftsinntekter", value: 100 }),
