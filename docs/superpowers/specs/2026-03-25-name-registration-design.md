@@ -8,30 +8,38 @@ Users sign up with `@bi.no` emails and are auto-assigned a name derived from the
 
 ### Detection
 
-A user needs to register their name when:
+A user needs to register their name when `nameConfirmed` is falsy on their user record:
 
 ```
-user.name === user.email.split("@")[0]
+!user.nameConfirmed
 ```
 
-No additional database flag needed — derived from existing data.
+A boolean `nameConfirmed` flag avoids the edge case where a user's real first name happens to match their email prefix. The modal shows once; after submitting (even if they keep the same name), `nameConfirmed` is set to `true`.
 
 ### Modal Behavior
 
 - **Blocking**: No close button, no backdrop click dismiss, no escape key dismiss
-- **Placement**: Rendered in the authenticated layout so it appears on any page
-- **Single field**: "Fornavn" (first name) input
-- **Validation**: Non-empty, trimmed, and must differ from the auto-generated email prefix
-- **Submit**: "Lagre" button calls a Convex mutation to update the user's `name` field
+- **Placement**: Rendered inside `convex-client-provider.tsx`, after the auth-gated `Authenticated` boundary
+- **Single field**: "Fornavn" (first name) input, pre-filled with current `name` value
+- **Validation**: Non-empty after trim, max 50 characters
+- **Loading state**: Button shows "Lagrer..." and is disabled while mutation is in flight
+- **Error state**: Inline error text below the input if mutation fails
+- **Submit**: "Lagre" button calls a `setName` mutation
 
 ### Backend Changes
 
 **`convex/users.ts`**:
 
-1. Extend the `me` query to return `name` and `email` (currently only returns `_id`)
+1. Add a new `meProfile` query (leave existing `me` query untouched to avoid breaking `documents-tab.tsx`):
+   - Calls `getAuthUserId(ctx)`, then `ctx.db.get(userId)`
+   - Returns `{ name, email, nameConfirmed }` or `null` if unauthenticated
 2. Add a `setName` mutation that:
-   - Validates the name is non-empty
-   - Updates the `name` field on the authenticated user's record
+   - Calls `getAuthUserId(ctx)` — throws if unauthenticated
+   - Never accepts a user ID argument (only updates the caller's own record)
+   - Validates: non-empty after trim, max 50 characters
+   - Updates both `name` and sets `nameConfirmed: true`
+
+**`convex/schema.ts`**: No change needed — Convex Auth's `authTables` provides the `users` table with a `name` field, and Convex is schemaless for additional fields unless strict validation is configured.
 
 ### Frontend Changes
 
@@ -39,18 +47,21 @@ No additional database flag needed — derived from existing data.
 
 - Uses the existing modal/overlay pattern from `add-company-dialog.tsx`
 - Matches existing form styling (inset shadow inputs, uppercase labels, accent button)
-- Renders when `user.name === user.email.split("@")[0]`
-- On submit, calls `setName` mutation, modal disappears reactively (Convex re-evaluates the condition)
+- Calls `useQuery(api.users.meProfile)` to get user data
+- Renders when `user.nameConfirmed` is falsy
+- Input pre-filled with `user.name` so users can keep it if it's their real name
+- On submit, calls `setName` mutation; modal disappears reactively when `nameConfirmed` becomes `true`
 
-**Integration point**: Render `<NameRegistrationModal />` inside `convex-client-provider.tsx` or the root authenticated layout, gated on auth state.
+**Integration point**: Render `<NameRegistrationModal />` inside `convex-client-provider.tsx`, within the `<Authenticated>` boundary that already wraps the app content.
 
 ### UI Spec
 
 - Centered modal with `bg-black/60` backdrop
 - Welcome heading: "Velkommen!"
 - Subtitle: "Skriv inn fornavnet ditt for å komme i gang"
-- Single input with label "FORNAVN" and placeholder "f.eks. Ola"
-- "Lagre" primary button (accent color)
+- Single input with label "FORNAVN", placeholder "f.eks. Ola", pre-filled with current name
+- "Lagre" primary button (accent color), shows "Lagrer..." when loading
+- Error text in `text-[#f87171]` below input if mutation fails
 - No cancel/close button
 
 ## Out of Scope
