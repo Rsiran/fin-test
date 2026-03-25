@@ -22,7 +22,10 @@ function SessionSentinel({ children }: { children: ReactNode }) {
     if (shouldAutoSignOut()) {
       setSigningOut(true);
       clearAuthStorage();
-      signOutRef.current();
+      signOutRef.current().catch(() => {
+        // Session may already be invalidated server-side (e.g. after bulk session clear)
+        setSigningOut(false);
+      });
     } else {
       markSessionActive();
     }
