@@ -5,6 +5,7 @@ import { ConvexAuthNextjsProvider } from "@convex-dev/auth/nextjs";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { ReactNode, useEffect, useRef, useState } from "react";
 import { shouldAutoSignOut, markSessionActive, clearAuthStorage } from "@/lib/auth-storage";
+import { NameRegistrationModal } from "@/components/name-registration-modal";
 
 const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
@@ -28,7 +29,12 @@ function SessionSentinel({ children }: { children: ReactNode }) {
   }, [isAuthenticated, isLoading]);
 
   if (signingOut || isLoading) return null;
-  return <>{children}</>;
+  return (
+    <>
+      <NameRegistrationModal />
+      {children}
+    </>
+  );
 }
 
 export function ConvexClientProvider({ children }: { children: ReactNode }) {
