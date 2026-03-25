@@ -198,6 +198,8 @@ async function doProcessing(
       currency: extractionResult.currency,
       originalUnit: extractionResult.originalUnit,
       unitEvidence: extractionResult.unitEvidence,
+      periodScope: extractionResult.periodScope,
+      periodEvidence: extractionResult.periodEvidence,
       normalizationWarning,
       ...(standardizedName ? { fileName: standardizedName } : {}),
       clearR2Key: true,

@@ -25,6 +25,8 @@ export default defineSchema({
     currency: v.optional(v.string()),
     originalUnit: v.optional(v.string()),
     unitEvidence: v.optional(v.string()),
+    periodScope: v.optional(v.string()),  // "standalone" | "cumulative"
+    periodEvidence: v.optional(v.string()),
     normalizationWarning: v.optional(v.string()),
     createdAt: v.number(),
     uploadedBy: v.optional(v.id("users")),
