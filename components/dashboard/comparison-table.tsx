@@ -8,6 +8,7 @@ interface ComparisonTableProps {
     metricName: string;
     value: number;
     unit: string;
+    source?: "extracted" | "derived";
   }[];
 }
 
@@ -23,8 +24,11 @@ const DISPLAY_METRICS = [
 export function ComparisonTable({ metrics }: ComparisonTableProps) {
   const periods = sortPeriods([...new Set(metrics.map((m) => m.period))]);
 
-  const getValue = (metricName: string, period: string) => {
-    const m = metrics.find((x) => x.metricName === metricName && x.period === period);
+  const getMetric = (metricName: string, period: string) => {
+    return metrics.find((x) => x.metricName === metricName && x.period === period);
+  };
+
+  const formatValue = (m: typeof metrics[0] | undefined) => {
     if (!m) return null;
     return m.unit === "%" ? `${m.value.toFixed(1)}%` : m.value.toLocaleString("nb-NO");
   };
@@ -63,13 +67,16 @@ export function ComparisonTable({ metrics }: ComparisonTableProps) {
                   {dm.label}
                 </td>
                 {periods.map((p) => {
-                  const val = getValue(dm.key, p);
+                  const m = getMetric(dm.key, p);
+                  const val = formatValue(m);
+                  const isDerived = m?.source === "derived";
                   return (
                     <td
                       key={p}
                       className={`text-right py-2.5 px-3 font-mono text-sm ${
                         p === latestPeriod ? "text-accent font-medium" : "text-[#F5F5F5]"
-                      }`}
+                      } ${isDerived ? "italic opacity-75" : ""}`}
+                      title={isDerived ? "Beregnet fra kumulative perioder" : undefined}
                     >
                       {val ?? "—"}
                     </td>

@@ -21,6 +21,9 @@ export function canonicalizePeriod(input: string): string {
   const halvMatch = s.match(/halvårsrapport\s*(\d{4})/);
   if (halvMatch) return `${halvMatch[1]}-H1`;
 
+  const nineMMatch = s.match(/9m\s*(\d{4})/);
+  if (nineMMatch) return `${nineMMatch[1]}-9M`;
+
   const fyMatch = s.match(/fy\s*(\d{4})/);
   if (fyMatch) return `${fyMatch[1]}-FY`;
 
@@ -52,9 +55,21 @@ export function periodToFileName(period: string): string | null {
   const hMatch = period.match(/^(\d{4})-H([12])$/);
   if (hMatch) return `H${hMatch[2]}${hMatch[1].slice(2)}`;
 
+  const nmMatch = period.match(/^(\d{4})-9M$/);
+  if (nmMatch) return `9M${nmMatch[1].slice(2)}`;
+
   return null;
 }
 
+const PERIOD_ORDER: Record<string, number> = {
+  Q1: 1, Q2: 2, H1: 3, Q3: 4, "9M": 5, Q4: 6, H2: 7, FY: 8,
+};
+
 export function sortPeriods(periods: string[]): string[] {
-  return [...periods].sort();
+  return [...periods].sort((a, b) => {
+    const [yearA, suffA] = a.split("-");
+    const [yearB, suffB] = b.split("-");
+    if (yearA !== yearB) return yearA.localeCompare(yearB);
+    return (PERIOD_ORDER[suffA] ?? 99) - (PERIOD_ORDER[suffB] ?? 99);
+  });
 }

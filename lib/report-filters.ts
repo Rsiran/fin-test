@@ -39,11 +39,16 @@ export function filterDocuments<T extends DocumentLike>(
   });
 }
 
-export function filterMetricsByDocuments<T extends { documentId: string }>(
+export function filterMetricsByDocuments<T extends { documentId: string; source?: string; derivation?: { operands: { documentId: string }[] } }>(
   metrics: T[],
   filteredDocIds: Set<string>,
 ): T[] {
-  return metrics.filter((m) => filteredDocIds.has(m.documentId));
+  return metrics.filter((m) => {
+    if (m.source === "derived" && m.derivation) {
+      return m.derivation.operands.some((op) => filteredDocIds.has(op.documentId));
+    }
+    return filteredDocIds.has(m.documentId);
+  });
 }
 
 export function getReadyCounts<T extends DocumentLike>(

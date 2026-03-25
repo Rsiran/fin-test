@@ -12,6 +12,8 @@ export interface ExtractedMetric {
 export interface ExtractionResult {
   period: string;
   reportType: string;
+  periodScope?: "standalone" | "cumulative";
+  periodEvidence?: string;
   currency?: string;
   originalUnit?: string;
   unitEvidence?: string;
@@ -243,10 +245,23 @@ Steg 3: Bruk riktig enhetslabel: MNOK, MEUR, MUSD, MGBP, MSEK, MDKK, etc.
 
 PRESISJON: Behold full presisjon fra tabellverdien. Eksempel: 125897 EUR'000 → 125.897 MEUR (IKKE 126 MEUR).
 
+KRITISK REGEL 4 — PERIODETYPE-DETEKSJON (gjør dette FØR du leser av tall):
+Bestem om rapporten presenterer FRITTSTÅENDE (standalone) eller KUMULATIVE tall:
+
+Kumulative indikatorer: "H1", "1H", "first half", "six months", "første halvår", "9M", "nine months", "first nine months", "første ni måneder", "year ended", "full year", "FY", "helår"
+
+Frittstående indikatorer: "Q1", "Q2", "Q3", "Q4", "first quarter", "second quarter", "third quarter", "fourth quarter", "1. kvartal", "2. kvartal", "3. kvartal", "4. kvartal", "three months ended [enkelt kvartal-datoperiode]"
+
+Hvis rapporten har BÅDE en frittstående OG kumulativ kolonne for SAMME periode (f.eks. "Q3 2025" ved siden av "9M 2025"): hent KUN fra den frittstående kvartalskolonnen. Forveksle IKKE dette med kumulativ-vs-forrige-år (f.eks. "9M 2025" vs "9M 2024") — begge er kumulative, forskjellige år; hent fra inneværende år.
+
+Du MÅ oppgi "periodEvidence" — eksakt tekst som beviser periodetypen.
+
 Returner et JSON-objekt med denne strukturen:
 {
   "period": "<rapporteringsperiode, f.eks. 'Q1 2025' eller 'Årsrapport 2024'>",
   "reportType": "<årsrapport|kvartalsrapport|prospekt|børsmelding|annet>",
+  "periodScope": "<standalone|cumulative>",
+  "periodEvidence": "<EKSAKT sitat fra kolonneoverskrift eller rapporttittel som viser periodetypen>",
   "currency": "<selskapets rapporteringsvaluta, f.eks. NOK, EUR, USD>",
   "originalUnit": "<opprinnelig enhet i rapporten, f.eks. hele EUR, TEUR, MEUR, NOK'000>",
   "unitEvidence": "<EKSAKT sitat fra dokumentet som viser enheten, f.eks. 'Amounts in EUR thousands'. Hvis ikke funnet: 'Ingen eksplisitt enhet funnet — antatt hele [valuta]'>",
@@ -306,6 +321,8 @@ export async function extractFinancialData(markdown: string): Promise<Extraction
   const currency = parsed.currency || undefined;
   const originalUnit = parsed.originalUnit || undefined;
   const unitEvidence = parsed.unitEvidence || undefined;
+  const periodScope = (parsed.periodScope === "cumulative" ? "cumulative" : "standalone") as "standalone" | "cumulative";
+  const periodEvidence = parsed.periodEvidence || undefined;
 
   if (unitEvidence) {
     console.log(`[unit-detection] currency=${currency}, originalUnit=${originalUnit}, evidence="${unitEvidence}"`);
@@ -320,6 +337,8 @@ export async function extractFinancialData(markdown: string): Promise<Extraction
   return {
     period,
     reportType,
+    periodScope,
+    periodEvidence,
     currency,
     originalUnit,
     unitEvidence,
