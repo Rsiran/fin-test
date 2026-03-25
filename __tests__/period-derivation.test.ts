@@ -42,7 +42,7 @@ describe("deriveStandaloneQuarters", () => {
     expect(result.find((m) => m.period === "2025-H1")).toBeDefined();
   });
 
-  it("derives Q4 from FY and 9M, hides FY", () => {
+  it("derives Q4 from FY and 9M, keeps FY visible", () => {
     const metrics = [
       makeMetric({ period: "2025-9M", metricName: "driftsinntekter", value: 450 }),
       makeMetric({ period: "2025-FY", metricName: "driftsinntekter", value: 600 }),
@@ -51,8 +51,8 @@ describe("deriveStandaloneQuarters", () => {
     const q4 = result.find((m) => m.period === "2025-Q4" && m.metricName === "driftsinntekter");
     expect(q4).toBeDefined();
     expect(q4!.value).toBe(150);
-    // FY hidden (Q4 derived), 9M stays (Q3 not derived — no H1)
-    expect(result.find((m) => m.period === "2025-FY")).toBeUndefined();
+    // FY stays visible (annual figure), 9M stays (Q3 not derived — no H1)
+    expect(result.find((m) => m.period === "2025-FY")).toBeDefined();
     expect(result.find((m) => m.period === "2025-9M")).toBeDefined();
   });
 
@@ -141,10 +141,10 @@ describe("deriveStandaloneQuarters", () => {
     expect(q2!.value).toBe(217);
     expect(q3!.value).toBe(154);
     expect(q4!.value).toBe(147);
-    // Cumulative periods should be filtered out
+    // H1 and 9M hidden, FY stays visible as annual figure
     expect(result.find((m) => m.period === "2025-H1")).toBeUndefined();
     expect(result.find((m) => m.period === "2025-9M")).toBeUndefined();
-    expect(result.find((m) => m.period === "2025-FY")).toBeUndefined();
+    expect(result.find((m) => m.period === "2025-FY")).toBeDefined();
   });
 
   it("remaps balance sheet from cumulative to standalone quarter", () => {
@@ -162,19 +162,17 @@ describe("deriveStandaloneQuarters", () => {
     expect(result.find((m) => m.period === "2025-H1")).toBeUndefined();
   });
 
-  it("does NOT hide FY for years without quarterly derivation", () => {
-    // 2024 has quarterly data → Q4 derived, FY hidden for 2024
-    // 2023 has only an annual report (FY) → FY must remain visible
+  it("keeps FY visible for all years, even when Q4 is derived", () => {
     const metrics = [
       makeMetric({ period: "2024-9M", metricName: "driftsinntekter", value: 450 }),
       makeMetric({ period: "2024-FY", metricName: "driftsinntekter", value: 600 }),
       makeMetric({ period: "2023-FY", metricName: "driftsinntekter", value: 500 }),
     ];
     const result = deriveStandaloneQuarters(metrics);
-    // 2024: Q4 derived, FY hidden
+    // 2024: Q4 derived, FY still visible
     expect(result.find((m) => m.period === "2024-Q4" && m.metricName === "driftsinntekter")).toBeDefined();
-    expect(result.find((m) => m.period === "2024-FY")).toBeUndefined();
-    // 2023: FY must stay — no quarterly data to derive from
+    expect(result.find((m) => m.period === "2024-FY")).toBeDefined();
+    // 2023: FY visible — no quarterly data
     const fy2023 = result.find((m) => m.period === "2023-FY" && m.metricName === "driftsinntekter");
     expect(fy2023).toBeDefined();
     expect(fy2023!.value).toBe(500);

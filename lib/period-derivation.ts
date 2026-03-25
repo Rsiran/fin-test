@@ -39,10 +39,11 @@ const DERIVATION_RULES: [string, string, string, string][] = [
 
 // Map cumulative periods to the standalone quarter they end on.
 // H1 balance sheet (30 Jun) = Q2 end-of-quarter snapshot, etc.
+// FY is excluded: it's a meaningful annual figure (from annual reports)
+// that should stay visible alongside any derived Q4.
 const CUMULATIVE_TO_QUARTER: Record<string, string> = {
   H1: "Q2",
   "9M": "Q3",
-  FY: "Q4",
 };
 
 const MARGIN_RATIOS = [
