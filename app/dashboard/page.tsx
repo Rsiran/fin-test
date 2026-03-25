@@ -9,6 +9,7 @@ import { CompanyDashboardCard } from "@/components/dashboard/company-dashboard-c
 import { AddCompanyDialog } from "@/components/add-company-dialog";
 import { Plus } from "@phosphor-icons/react";
 import Link from "next/link";
+import { LogoutButton } from "@/components/logout-button";
 
 export default function DashboardPage() {
   const companies = useQuery(api.watchlist.listMyCompanies);
@@ -35,6 +36,7 @@ export default function DashboardPage() {
             <Plus size={16} weight="bold" />
             Nytt selskap
           </button>
+          <LogoutButton />
         </div>
       </div>
 
