@@ -40,10 +40,15 @@ export function filterDocuments(
 }
 
 export function filterMetricsByDocuments(
-  metrics: { documentId: string }[],
+  metrics: { documentId: string; source?: string; derivation?: { operands: { documentId: string }[] } }[],
   filteredDocIds: Set<string>,
 ): typeof metrics {
-  return metrics.filter((m) => filteredDocIds.has(m.documentId));
+  return metrics.filter((m) => {
+    if (m.source === "derived" && m.derivation) {
+      return m.derivation.operands.some((op) => filteredDocIds.has(op.documentId));
+    }
+    return filteredDocIds.has(m.documentId);
+  });
 }
 
 export function getReadyCounts(

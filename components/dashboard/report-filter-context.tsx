@@ -20,6 +20,7 @@ import {
   filterMetricsByDocuments,
   getReadyCounts,
 } from "@/lib/report-filters";
+import { deriveStandaloneQuarters } from "@/lib/period-derivation";
 
 interface ReportFilterContextValue {
   selectedTypes: string[];
@@ -117,6 +118,12 @@ export function ReportFilterProvider({
 
   const documents = useQuery(api.documents.listByCompany, { companyId });
   const metrics = useQuery(api.financialMetrics.getByCompany, { companyId });
+
+  const enrichedMetrics = useMemo(() => {
+    if (!metrics) return undefined;
+    return deriveStandaloneQuarters(metrics as any);
+  }, [metrics]);
+
   const isLoading = documents === undefined || metrics === undefined;
 
   const filterOpts = useMemo(
@@ -193,13 +200,13 @@ export function ReportFilterProvider({
   );
 
   const filteredMets = useMemo(() => {
-    if (!metrics || !filteredDocs) return undefined;
-    if (selectedTypes.length === 0 && selectedYears.length === 0) return metrics;
+    if (!enrichedMetrics || !filteredDocs) return undefined;
+    if (selectedTypes.length === 0 && selectedYears.length === 0) return enrichedMetrics;
     const readyDocIds = new Set(
       filteredDocs.filter((d: any) => d.status === "ready").map((d: any) => d._id),
     );
-    return filterMetricsByDocuments(metrics as any, readyDocIds as any);
-  }, [metrics, filteredDocs, selectedTypes, selectedYears]);
+    return filterMetricsByDocuments(enrichedMetrics as any, readyDocIds as any);
+  }, [enrichedMetrics, filteredDocs, selectedTypes, selectedYears]);
 
   const counts = useMemo(
     () =>
