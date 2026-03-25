@@ -6,15 +6,16 @@ import { Id } from "@/convex/_generated/dataModel";
 import { UploadDropzone } from "../upload-dropzone";
 import { Trash, Warning } from "@phosphor-icons/react";
 import { useState } from "react";
+import { useReportFilter } from "./report-filter-context";
 
 export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
   const company = useQuery(api.companies.get, { id: companyId });
-  const documents = useQuery(api.documents.listByCompany, { companyId });
+  const { allDocuments, filteredDocuments: documents, isFiltered, resetFilters } = useReportFilter();
   const removeDocument = useMutation(api.documents.remove);
   const currentUserId = useQuery(api.users.me);
   const [showDeleteAll, setShowDeleteAll] = useState(false);
 
-  const myDocuments = documents?.filter((d: { uploadedBy?: string }) => d.uploadedBy === currentUserId);
+  const myDocuments = allDocuments?.filter((d: { uploadedBy?: string }) => d.uploadedBy === currentUserId);
 
   const handleDeleteAll = async () => {
     if (!myDocuments) return;
@@ -78,6 +79,13 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
           {[1, 2, 3].map((i) => (
             <div key={i} className="skeleton h-12" />
           ))}
+        </div>
+      ) : documents.length === 0 && isFiltered ? (
+        <div className="text-sm text-[#666666]">
+          Ingen rapporter matcher filteret.{" "}
+          <button onClick={resetFilters} className="text-accent hover:text-accent/80 transition-colors duration-150">
+            Nullstill filter
+          </button>
         </div>
       ) : documents.length === 0 ? (
         <p className="text-sm text-[#666666]">Ingen dokumenter lastet opp ennå</p>
