@@ -24,19 +24,19 @@ describe("extractYear", () => {
 
 describe("getFilterOptions", () => {
   const docs = [
-    { reportType: "kvartalsrapport", period: "2024-Q1", status: "ready" },
-    { reportType: "kvartalsrapport", period: "2024-Q2", status: "ready" },
-    { reportType: "årsrapport", period: "2024-FY", status: "ready" },
-    { reportType: "kvartalsrapport", period: "2025-Q1", status: "processing" },
+    { _id: "1", reportType: "kvartalsrapport", period: "2024-Q1", status: "ready" },
+    { _id: "2", reportType: "kvartalsrapport", period: "2024-Q2", status: "ready" },
+    { _id: "3", reportType: "årsrapport", period: "2024-FY", status: "ready" },
+    { _id: "4", reportType: "kvartalsrapport", period: "2025-Q1", status: "processing" },
   ];
 
   it("returns distinct types from ready documents only", () => {
-    const opts = getFilterOptions(docs as any);
+    const opts = getFilterOptions(docs);
     expect(opts.types).toEqual(["kvartalsrapport", "årsrapport"]);
   });
 
   it("returns distinct years from ready documents, sorted descending", () => {
-    const opts = getFilterOptions(docs as any);
+    const opts = getFilterOptions(docs);
     expect(opts.years).toEqual(["2024"]);
   });
 });
@@ -50,38 +50,38 @@ describe("filterDocuments", () => {
   ];
 
   it("returns all docs when no filters active", () => {
-    expect(filterDocuments(docs as any, [], [])).toHaveLength(4);
+    expect(filterDocuments(docs, [], [])).toHaveLength(4);
   });
 
   it("filters by single type", () => {
-    const result = filterDocuments(docs as any, ["årsrapport"], []);
+    const result = filterDocuments(docs, ["årsrapport"], []);
     expect(result).toHaveLength(1);
     expect(result[0]._id).toBe("2");
   });
 
   it("filters by multiple types", () => {
-    const result = filterDocuments(docs as any, ["årsrapport", "kvartalsrapport"], []);
+    const result = filterDocuments(docs, ["årsrapport", "kvartalsrapport"], []);
     expect(result).toHaveLength(4);
   });
 
   it("filters by single year", () => {
-    const result = filterDocuments(docs as any, [], ["2025"]);
+    const result = filterDocuments(docs, [], ["2025"]);
     expect(result).toHaveLength(2);
   });
 
   it("filters by multiple years", () => {
-    const result = filterDocuments(docs as any, [], ["2024", "2025"]);
+    const result = filterDocuments(docs, [], ["2024", "2025"]);
     expect(result).toHaveLength(4);
   });
 
   it("filters by type AND year", () => {
-    const result = filterDocuments(docs as any, ["kvartalsrapport"], ["2025"]);
+    const result = filterDocuments(docs, ["kvartalsrapport"], ["2025"]);
     expect(result).toHaveLength(2);
   });
 
   it("includes non-ready docs that match filters", () => {
-    const result = filterDocuments(docs as any, ["kvartalsrapport"], ["2025"]);
-    expect(result.some((d: any) => d.status === "processing")).toBe(true);
+    const result = filterDocuments(docs, ["kvartalsrapport"], ["2025"]);
+    expect(result.some((d) => d.status === "processing")).toBe(true);
   });
 });
 
@@ -114,7 +114,7 @@ describe("getReadyCounts", () => {
 
   it("counts only ready documents", () => {
     const filtered = [all[0], all[2]];
-    const counts = getReadyCounts(all as any, filtered as any);
+    const counts = getReadyCounts(all, filtered);
     expect(counts.total).toBe(2);
     expect(counts.filtered).toBe(1);
   });
