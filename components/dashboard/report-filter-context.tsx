@@ -28,8 +28,8 @@ interface ReportFilterContextValue {
   toggleType: (type: string) => void;
   toggleYear: (year: string) => void;
   resetFilters: () => void;
-  allDocuments: Doc<"documents">[] | undefined;
-  filteredDocuments: Doc<"documents">[] | undefined;
+  allDocuments: (Doc<"documents"> & { markdownUrl: string | null })[] | undefined;
+  filteredDocuments: (Doc<"documents"> & { markdownUrl: string | null })[] | undefined;
   filteredMetrics: Doc<"financialMetrics">[] | undefined;
   filterOptions: { types: string[]; years: string[] };
   totalCount: number;

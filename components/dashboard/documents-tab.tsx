@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { UploadDropzone } from "../upload-dropzone";
-import { Trash, Warning } from "@phosphor-icons/react";
+import { DownloadSimple, Trash, Warning } from "@phosphor-icons/react";
 import { useState } from "react";
 import { useReportFilter } from "./report-filter-context";
 
@@ -103,7 +103,7 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
               </tr>
             </thead>
             <tbody>
-              {documents.map((doc: { _id: Id<"documents">; fileName: string; reportType: string; period: string; status: string; uploadedBy?: string }) => (
+              {documents.map((doc: { _id: Id<"documents">; fileName: string; reportType: string; period: string; status: string; uploadedBy?: string; markdownUrl?: string | null }) => (
                 <tr
                   key={doc._id}
                   className="border-b border-white/5 last:border-0 hover:bg-white/[0.03] transition-colors duration-150"
@@ -137,7 +137,17 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
                       </span>
                     </span>
                   </td>
-                  <td className="py-3 px-4 text-right">
+                  <td className="py-3 px-4 text-right flex items-center justify-end gap-2">
+                    {doc.markdownUrl && (
+                      <a
+                        href={doc.markdownUrl}
+                        download={doc.fileName.replace(/\.pdf$/i, ".md")}
+                        className="text-[#666666] hover:text-accent transition-colors duration-150"
+                        title="Last ned markdown"
+                      >
+                        <DownloadSimple size={16} />
+                      </a>
+                    )}
                     {doc.uploadedBy === currentUserId && (
                       <button
                         onClick={() => removeDocument({ id: doc._id })}
