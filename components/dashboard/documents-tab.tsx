@@ -138,14 +138,22 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
                         </span>
                       </span>
                       {doc.markdownUrl && (
-                        <a
-                          href={doc.markdownUrl}
-                          download={doc.fileName.replace(/\.pdf$/i, ".md")}
+                        <button
+                          onClick={async () => {
+                            const res = await fetch(doc.markdownUrl!);
+                            const blob = await res.blob();
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href = url;
+                            a.download = doc.fileName.replace(/\.pdf$/i, ".md");
+                            a.click();
+                            URL.revokeObjectURL(url);
+                          }}
                           className="text-[#666666] hover:text-accent transition-colors duration-150"
                           title="Last ned markdown"
                         >
                           <DownloadSimple size={16} />
-                        </a>
+                        </button>
                       )}
                     </span>
                   </td>
