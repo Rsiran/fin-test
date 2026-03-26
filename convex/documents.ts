@@ -12,8 +12,16 @@ export const listByCompany = query({
       .withIndex("by_company", (q) => q.eq("companyId", args.companyId))
       .collect();
     const oneHourAgo = Date.now() - 60 * 60 * 1000;
-    return docs.filter(
+    const visible = docs.filter(
       (d) => d.status !== "uploading" || d.createdAt > oneHourAgo
+    );
+    return Promise.all(
+      visible.map(async (d) => ({
+        ...d,
+        markdownUrl: d.markdownFileId
+          ? await ctx.storage.getUrl(d.markdownFileId)
+          : null,
+      }))
     );
   },
 });
