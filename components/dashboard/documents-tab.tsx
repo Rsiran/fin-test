@@ -118,36 +118,38 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
                     {doc.period}
                   </td>
                   <td className="py-3 px-4">
-                    <span className="flex items-center gap-1.5">
-                      <span
-                        className={`w-2 h-2 rounded-full ${
-                          doc.status === "ready"
-                            ? "bg-accent"
+                    <span className="flex items-center gap-2">
+                      <span className="flex items-center gap-1.5">
+                        <span
+                          className={`w-2 h-2 rounded-full ${
+                            doc.status === "ready"
+                              ? "bg-accent"
+                              : doc.status === "error"
+                              ? "bg-negative"
+                              : "bg-warning"
+                          }`}
+                        />
+                        <span className="text-xs text-[#AAAAAA]">
+                          {doc.status === "ready"
+                            ? "Klar"
                             : doc.status === "error"
-                            ? "bg-negative"
-                            : "bg-warning"
-                        }`}
-                      />
-                      <span className="text-xs text-[#AAAAAA]">
-                        {doc.status === "ready"
-                          ? "Klar"
-                          : doc.status === "error"
-                          ? "Feil"
-                          : "Prosesserer..."}
+                            ? "Feil"
+                            : "Prosesserer..."}
+                        </span>
                       </span>
+                      {doc.markdownUrl && (
+                        <a
+                          href={doc.markdownUrl}
+                          download={doc.fileName.replace(/\.pdf$/i, ".md")}
+                          className="text-[#666666] hover:text-accent transition-colors duration-150"
+                          title="Last ned markdown"
+                        >
+                          <DownloadSimple size={16} />
+                        </a>
+                      )}
                     </span>
                   </td>
-                  <td className="py-3 px-4 text-right flex items-center justify-end gap-2">
-                    {doc.markdownUrl && (
-                      <a
-                        href={doc.markdownUrl}
-                        download={doc.fileName.replace(/\.pdf$/i, ".md")}
-                        className="text-[#666666] hover:text-accent transition-colors duration-150"
-                        title="Last ned markdown"
-                      >
-                        <DownloadSimple size={16} />
-                      </a>
-                    )}
+                  <td className="py-3 px-4 text-right">
                     {doc.uploadedBy === currentUserId && (
                       <button
                         onClick={() => removeDocument({ id: doc._id })}
