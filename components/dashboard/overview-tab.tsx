@@ -54,7 +54,10 @@ export function OverviewTab(_props: { companyId: Id<"companies"> }) {
     );
   }
 
-  const typedMetrics = metrics as Metric[];
+  const typedMetrics = (metrics as Metric[]).map((m) => ({
+    ...m,
+    metricName: m.metricName.toLowerCase(),
+  }));
   const periods = sortPeriods([...new Set(typedMetrics.map((m) => m.period))]);
   const latestPeriod = periods[periods.length - 1];
   const prevPeriod = periods.length >= 2 ? periods[periods.length - 2] : null;
