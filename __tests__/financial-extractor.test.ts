@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateMetrics, extractFinancialSections, type ExtractedMetric } from "../lib/financial-extractor";
+import { validateMetrics, prepareStructuredInput, type ExtractedMetric } from "../lib/financial-extractor";
 
 describe("validateMetrics", () => {
   it("accepts valid metrics", () => {
@@ -39,34 +39,49 @@ describe("validateMetrics", () => {
   });
 });
 
-describe("extractFinancialSections", () => {
-  it("returns short documents unchanged", () => {
-    const md = "# Report\n\nSmall document.";
-    expect(extractFinancialSections(md)).toBe(md);
+const REACH_SUBSEA_EXCERPT = `
+## Key figures
+
+| |4Q 2023|4Q 2022|12M 2023|12M 2022|
+|---|---|---|---|---|
+|Revenue (NOKm)|474|327|1 996|1 163|
+|EBIT (NOKm)|80|35|332|105|
+|Equity (NOKm)|928|579|928|579|
+
+## Income statement
+
+|Statement of profit or loss (NOK 1000)|Q4 2023|Q4 2022|12M 2023|12M 2022|Notes|
+|---|---|---|---|---|---|
+|Revenue|474 138|327 413|1 995 903|1 162 821| |
+|EBITDA|212 180|119 897|954 790|458 787| |
+|Operating result (EBIT)|79 522|34 648|331 786|105 255| |
+
+#### Balance Sheet
+
+|Statement of financial position (NOK 1000)|31.12.2023|31.12.2022|Notes|
+|---|---|---|---|
+|Total assets|2 692 632|952 085| |
+|Total equity|928 005|579 442| |
+
+#### Cash flow
+
+|Statement of cash flows (NOK 1000)|Q4 2023|Q4 2022|12M 2023|12M 2022|
+|---|---|---|---|---|
+|Cash from operating activities|547 639|120 497|1 053 715|293 261| |
+`;
+
+describe("prepareStructuredInput", () => {
+  it("excludes key figures summary and includes financial statements", () => {
+    const result = prepareStructuredInput(REACH_SUBSEA_EXCERPT);
+    expect(result).toContain("EBITDA");
+    expect(result).toContain("212 180");
+    expect(result).not.toContain("Revenue (NOKm)");
+    expect(result).toContain("BALANCE SHEET");
+    expect(result).toContain("CASH FLOW");
   });
 
-  it("prioritizes sections with financial keywords", () => {
-    // Build a doc where financial sections are buried deep
-    const filler = Array.from({ length: 50 }, (_, i) =>
-      `# Chapter ${i}\n\n${"Lorem ipsum dolor sit amet. ".repeat(100)}`
-    ).join("\n\n");
-    const financial = "# Resultatregnskap\n\n| Driftsinntekter | 500 MNOK |\n|---|---|\n| EBITDA | 120 MNOK |";
-    const bigDoc = filler + "\n\n" + financial;
-
-    const result = extractFinancialSections(bigDoc, 5000);
-    expect(result).toContain("Resultatregnskap");
-    expect(result).toContain("Driftsinntekter");
-    expect(result.length).toBeLessThan(5000);
-  });
-
-  it("preserves original document order of selected sections", () => {
-    const doc = "# Intro\n\nWelcome.\n\n# Balanse\n\nSum eiendeler: 1000 MNOK\n\n# Notes\n\nDetails.\n\n# Kontantstrøm\n\nOperasjonelle aktiviteter: 200 MNOK";
-    const result = extractFinancialSections(doc, 500);
-    const balanseIdx = result.indexOf("Balanse");
-    const kontantIdx = result.indexOf("Kontantstrøm");
-    // Balanse should appear before Kontantstrøm (original order)
-    if (balanseIdx !== -1 && kontantIdx !== -1) {
-      expect(balanseIdx).toBeLessThan(kontantIdx);
-    }
+  it("includes unit context", () => {
+    const result = prepareStructuredInput(REACH_SUBSEA_EXCERPT);
+    expect(result).toContain("thousands");
   });
 });
