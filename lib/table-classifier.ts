@@ -1,16 +1,4 @@
-// ParsedTable is defined here until table-parser.ts is available.
-// When table-parser.ts lands, replace this block with:
-//   import { type ParsedTable } from "./table-parser";
-//   export type { ParsedTable };
-export interface ParsedTable {
-  heading: string;
-  headerRow: string[];
-  rows: { label: string; values: string[] }[];
-  rawText: string;
-  lineNumber: number;
-  unitIndicator: string | null;
-  detectedUnit: "thousands" | "millions" | "billions" | "whole" | null;
-}
+import { type ParsedTable } from "./table-parser";
 
 export type TableClass =
   | "income_statement"
