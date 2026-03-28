@@ -9,6 +9,10 @@ export function canonicalizePeriod(input: string): string {
   const qMatch = s.match(/q(\d)\s*(\d{4})/);
   if (qMatch) return `${qMatch[2]}-Q${qMatch[1]}`;
 
+  // "1Q 2025", "4Q2025" → "2025-Q1", "2025-Q4"
+  const nqMatch = s.match(/(\d)q\s*(\d{4})/);
+  if (nqMatch) return `${nqMatch[2]}-Q${nqMatch[1]}`;
+
   const kvMatch = s.match(/(\S+)\s*kvartal\s*(\d{4})/);
   if (kvMatch) {
     const q = quarterWords[kvMatch[1]] ?? kvMatch[1];
@@ -23,6 +27,14 @@ export function canonicalizePeriod(input: string): string {
 
   const nineMMatch = s.match(/9m\s*(\d{4})/);
   if (nineMMatch) return `${nineMMatch[1]}-9M`;
+
+  // "12M 2024" → "2024-FY" (must come before 6M check)
+  const twelveMMatch = s.match(/12m\s*(\d{4})/);
+  if (twelveMMatch) return `${twelveMMatch[1]}-FY`;
+
+  // "6M 2024" → "2024-H1"
+  const sixMMatch = s.match(/6m\s*(\d{4})/);
+  if (sixMMatch) return `${sixMMatch[1]}-H1`;
 
   const fyMatch = s.match(/fy\s*(\d{4})/);
   if (fyMatch) return `${fyMatch[1]}-FY`;

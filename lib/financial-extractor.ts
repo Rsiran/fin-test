@@ -1,4 +1,8 @@
 import { canonicalizePeriod } from "./period-format";
+import { parseMarkdownTables } from "./table-parser";
+import { classifyTable } from "./table-classifier";
+import { resolveUnits } from "./unit-resolver";
+import { buildStructuredInput } from "./structured-input";
 
 export interface ExtractedMetric {
   metricName: string;
@@ -73,6 +77,63 @@ function fixBalanceSheetMagnitude(metrics: ExtractedMetric[]): ExtractedMetric[]
   return metrics;
 }
 
+/**
+ * Log warnings for expected metrics that are missing from extraction.
+ * Does not block storage — informational only.
+ */
+export function checkCompleteness(
+  metrics: ExtractedMetric[],
+  structuredInput: string
+): void {
+  const expectedIfPresent: { metric: string; tableSignal: string }[] = [
+    { metric: "driftsinntekter", tableSignal: "revenue" },
+    { metric: "driftsresultat", tableSignal: "operating result" },
+    { metric: "ebitda", tableSignal: "ebitda" },
+    { metric: "aarsresultat", tableSignal: "profit" },
+    { metric: "sum_eiendeler", tableSignal: "total assets" },
+    { metric: "egenkapital", tableSignal: "total equity" },
+  ];
+
+  const inputLower = structuredInput.toLowerCase();
+  const extractedNames = new Set(metrics.map((m) => m.metricName));
+
+  for (const { metric, tableSignal } of expectedIfPresent) {
+    if (!extractedNames.has(metric) && inputLower.includes(tableSignal)) {
+      console.warn(
+        `[completeness] "${metric}" missing from extraction but "${tableSignal}" present in input`
+      );
+    }
+  }
+}
+
+/**
+ * Compare new metrics against historical values for the same company.
+ * Logs warnings for suspicious magnitude changes (>10x).
+ */
+export function checkMagnitude(
+  newMetrics: ExtractedMetric[],
+  historicalMetrics: { metricName: string; value: number }[]
+): void {
+  if (historicalMetrics.length === 0) return;
+
+  const histMap = new Map<string, number>();
+  for (const m of historicalMetrics) {
+    histMap.set(m.metricName, m.value);
+  }
+
+  for (const metric of newMetrics) {
+    const hist = histMap.get(metric.metricName);
+    if (hist === undefined || hist === 0 || metric.unit === "%") continue;
+    const ratio = Math.abs(metric.value / hist);
+    if (ratio > 10 || ratio < 0.1) {
+      console.warn(
+        `[magnitude] "${metric.metricName}" changed ${ratio.toFixed(1)}x: ` +
+        `${hist} → ${metric.value} ${metric.unit}`
+      );
+    }
+  }
+}
+
 export function validateMetrics(metrics: ExtractedMetric[]): ValidationResult {
   // First fix any magnitude errors using accounting identities
   const fixed = fixBalanceSheetMagnitude(metrics);
@@ -132,7 +193,7 @@ const FINANCIAL_KEYWORDS = [
  */
 const MAX_SECTION_CHARS = 15_000;
 
-export function extractFinancialSections(markdown: string, maxChars = 80000): string {
+function extractFinancialSections(markdown: string, maxChars = 80000): string {
   // If already small enough, return as-is
   if (markdown.length <= maxChars) return markdown;
 
@@ -182,105 +243,81 @@ export function extractFinancialSections(markdown: string, maxChars = 80000): st
   return selected.map((s) => s.section).join("\n\n");
 }
 
-const EXTRACTION_PROMPT = `Du er en ekspert på norsk finansanalyse. Analyser følgende utdrag fra en finansrapport og ekstraher alle tilgjengelige finansielle nøkkeltall.
+export function prepareStructuredInput(markdown: string): string {
+  const tables = parseMarkdownTables(markdown);
+  const classified = tables.map((table) => ({
+    table,
+    classification: classifyTable(table),
+  }));
+  const resolved = resolveUnits(classified);
+  const structured = buildStructuredInput(resolved);
 
-KRITISK REGEL 1 — BRUK ALLTID TABELLVERDIER, IKKE NARRATIV TEKST:
-Finansrapporter inneholder både presis tabelldata og avrundede narrative oppsummeringer.
-Du MÅ ALLTID hente tall fra finansielle tabeller/oppstillinger (resultatregnskap, balanse, kontantstrøm, APM-tabeller), ALDRI fra løpende tekst som "amounted to EUR 126 million".
-- Tabellverdier er presise (f.eks. 125,897 i EUR'000 = 125.897 MEUR)
-- Narrative verdier er avrundet (f.eks. "EUR 126 million") og skal IGNORERES
-- Hvis en tabell og narrativ tekst gir forskjellige tall, bruk ALLTID tabellverdien
+  if (!structured) {
+    return stripNumericCommas(extractFinancialSections(markdown));
+  }
 
-KRITISK REGEL 2 — ENHETDETEKSJON (gjør dette FØR du leser av noen tall):
-Ulike rapporter bruker forskjellige skalaer. Du MÅ identifisere skalaen FØRST ved å søke etter disse mønstrene i tabelloverskrifter, fotnoter, og starten av finansielle seksjoner:
+  return stripNumericCommas(structured);
+}
 
-Tusen-indikatorer (del tallene på 1 000 for å normalisere til millioner):
-  - "Beløp i tusen" / "Amounts in thousands" / "in EUR thousands" / "in USD thousands"
-  - TNOK, TEUR, TSEK, TDKK, TUSD, TGBP
-  - "'000" / "(000s)" / "NOK 1 000" / "EUR 1 000" / "EUR'000" / "USD'000"
-  - "T€" / "T$" / "Tkr"
-  - Tabelloverskrift med "(tusen)" / "(thousands)" / "(in thousands)"
-  - "Tall i tusen" / "Figures in thousands" / "Expressed in thousands"
+const EXTRACTION_PROMPT = `Du er en ekspert på norsk finansanalyse.
 
-Million-indikatorer (bruk tallene direkte):
-  - "Beløp i millioner" / "Amounts in millions" / "in EUR millions"
-  - MNOK, MEUR, MSEK, MDKK, MUSD, MGBP
-  - "mill." / "mill. kr" / "mKR" / "mill. NOK" / "mill. EUR"
-  - "M€" / "M$" / "Mkr"
-  - "Figures in millions" / "Expressed in millions"
+Du mottar ferdig strukturerte finansielle tabeller (resultatregnskap, balanse, kontantstrøm) med eksplisitt enhetsangivelse. Tabellene er allerede identifisert og klassifisert — du trenger IKKE lete etter dem.
 
-Milliard-indikatorer (gang tallene med 1 000 for å normalisere til millioner):
-  - "mrd." / "mrd. kr" / "milliarder" / "billions" / "BNOK" / "BEUR" / "BUSD"
+OPPGAVE 1 — VELG RIKTIG KOLONNE:
+Hent alltid verdien for GJELDENDE rapporteringsperiode (frittstående kvartal, IKKE kumulativ).
+- Hvis tabellen har BÅDE "Q4 2025" og "12M 2025": bruk "Q4 2025"
+- Hvis tabellen har BÅDE "2Q 2025" og "6M 2025": bruk "2Q 2025"
+- Forveksle IKKE med forrige-års sammenligning (f.eks. "Q4 2024") — det er historisk data.
 
-Hele enheter (del tallene på 1 000 000 for å normalisere til millioner):
-  - Ingen av mønstrene ovenfor funnet i dokumentet
-  - Tall har typisk 6+ sifre for inntekter/eiendeler hos mellomstore/store selskaper
+OPPGAVE 2 — STANDARDISER METRIKKNAVNENE:
+Bruk KUN disse navnene:
+- resultat: driftsinntekter, driftsresultat, ebitda, resultat_for_skatt, aarsresultat, resultat_per_aksje
+- balanse: sum_eiendeler, egenkapital, total_gjeld, kontanter, egenkapitalandel
+- kontantstrøm: operasjonell_kontantstrom, investeringsaktiviteter, finansieringsaktiviteter, fri_kontantstrom, netto_endring_kontanter
+- nøkkeltall: driftsmargin, ebitda_margin, netto_margin, roe, roa, gjeldsgrad
 
-VIKTIG: Sitatbevis er PÅKREVD. Du MÅ finne og sitere den eksakte teksten som viser enheten.
+Kartlegging:
+- Revenue / Total revenue / Omsetning / Driftsinntekter → "driftsinntekter"
+- Operating profit / EBIT / Operating result → "driftsresultat"
+- EBITDA / EBITDAR → "ebitda"
+- Profit before tax / Resultat før skatt → "resultat_for_skatt"
+- Profit / Net income / Årsresultat → "aarsresultat"
+- Total assets / Sum eiendeler → "sum_eiendeler"
+- Total equity / Egenkapital → "egenkapital"
+- Total liabilities / Total gjeld → "total_gjeld"
+- Cash / Cash and cash equivalents / Kontanter → "kontanter"
+- Cash from operating activities → "operasjonell_kontantstrom"
+- Cash from investing activities → "investeringsaktiviteter"
+- Cash from financing activities → "finansieringsaktiviteter"
 
-MERK: Komma er allerede fjernet fra tall i denne teksten. Alle tall er rene heltall (f.eks. 1252560, ikke 1,252,560). Desimaltegn er punktum (.).
+OPPGAVE 3 — NORMALISER VERDIER:
+Enheten for hver tabell er oppgitt i inndataen. Bruk den til å konvertere til MILLIONER.
+- Komma er allerede fjernet fra tall. Alle tall er rene (f.eks. 1252560).
+- Negative tall kan vises som (tall) eller -tall.
+- Behold full presisjon: 125897 i tusen → 125.897 MNOK, IKKE 126 MNOK.
 
-KRITISK REGEL 3 — METRIKKNAVNSTANDARDISERING:
-Bruk KUN metrikknavnene listet nedenfor. Hvis rapporten bruker en variant:
-  - EBITDAR, EBITDA (before rent) → bruk "ebitda" (legg til confidence "medium" og noter varianten)
-  - Driftsinntekter / Revenue / Total revenue / Omsetning → bruk "driftsinntekter"
-  - Operating profit / EBIT → bruk "driftsresultat"
-Hent alltid verdien for GJELDENDE rapporteringsperiode. Ikke hent historiske sammenligningsperioder.
+OPPGAVE 4 — FINN VALUTA:
+Se etter valutaindikatorer i tabelloverskriftene (NOK, EUR, USD, SEK, etc.).
 
-NORMALISERING:
-Alle pengeverdier skal normaliseres til MILLIONER av selskapets rapporteringsvaluta.
-
-Steg 1: Finn selskapets rapporteringsvaluta (NOK, EUR, USD, GBP, SEK, DKK, etc.)
-  - Se etter "Beløp i...", "Amounts in...", valutasymboler, eller tabelloverskrifter
-  - IKKE konverter mellom valutaer — behold selskapets egen valuta
-
-Steg 2: Bruk skalaen du identifiserte ovenfor til å normalisere:
-  - Hele kroner/currency → del på 1 000 000
-  - Tusen (TNOK/'000 etc.) → del på 1 000
-  - Millioner (MNOK/mill. etc.) → bruk direkte
-  - Milliarder (mrd./BNOK etc.) → gang med 1 000
-  - Prosenter og forholdstall → behold som de er
-
-Steg 3: Bruk riktig enhetslabel: MNOK, MEUR, MUSD, MGBP, MSEK, MDKK, etc.
-
-PRESISJON: Behold full presisjon fra tabellverdien. Eksempel: 125897 EUR'000 → 125.897 MEUR (IKKE 126 MEUR).
-
-KRITISK REGEL 4 — PERIODETYPE-DETEKSJON (gjør dette FØR du leser av tall):
-Bestem om rapporten presenterer FRITTSTÅENDE (standalone) eller KUMULATIVE tall:
-
-Kumulative indikatorer: "H1", "1H", "first half", "six months", "første halvår", "9M", "nine months", "first nine months", "første ni måneder", "year ended", "full year", "FY", "helår"
-
-Frittstående indikatorer: "Q1", "Q2", "Q3", "Q4", "first quarter", "second quarter", "third quarter", "fourth quarter", "1. kvartal", "2. kvartal", "3. kvartal", "4. kvartal", "three months ended [enkelt kvartal-datoperiode]"
-
-Hvis rapporten har BÅDE en frittstående OG kumulativ kolonne for SAMME periode (f.eks. "Q3 2025" ved siden av "9M 2025"): hent KUN fra den frittstående kvartalskolonnen. Forveksle IKKE dette med kumulativ-vs-forrige-år (f.eks. "9M 2025" vs "9M 2024") — begge er kumulative, forskjellige år; hent fra inneværende år.
-
-Du MÅ oppgi "periodEvidence" — eksakt tekst som beviser periodetypen.
-
-Returner et JSON-objekt med denne strukturen:
+Returner et JSON-objekt:
 {
-  "period": "<rapporteringsperiode, f.eks. 'Q1 2025' eller 'Årsrapport 2024'>",
+  "period": "<rapporteringsperiode, f.eks. 'Q4 2025' eller '1Q 2025'>",
   "reportType": "<årsrapport|kvartalsrapport|prospekt|børsmelding|annet>",
   "periodScope": "<standalone|cumulative>",
-  "periodEvidence": "<EKSAKT sitat fra kolonneoverskrift eller rapporttittel som viser periodetypen>",
-  "currency": "<selskapets rapporteringsvaluta, f.eks. NOK, EUR, USD>",
-  "originalUnit": "<opprinnelig enhet i rapporten, f.eks. hele EUR, TEUR, MEUR, NOK'000>",
-  "unitEvidence": "<EKSAKT sitat fra dokumentet som viser enheten, f.eks. 'Amounts in EUR thousands'. Hvis ikke funnet: 'Ingen eksplisitt enhet funnet — antatt hele [valuta]'>",
+  "periodEvidence": "<EKSAKT kolonneoverskrift du hentet verdier fra>",
+  "currency": "<NOK|EUR|USD|SEK|DKK|GBP>",
+  "originalUnit": "<enhet fra inndataen, f.eks. thousands, millions>",
+  "unitEvidence": "<enhetsbeskrivelse fra inndataen>",
   "metrics": [
     {
-      "metricName": "<norsk navn>",
-      "value": <numerisk verdi i millioner av rapporteringsvaluta for pengeverdier, eller original verdi for prosenter/forholdstall>,
+      "metricName": "<standardisert navn>",
+      "value": <numerisk verdi i millioner>,
       "unit": "<MNOK|MEUR|MUSD|MSEK|MDKK|MGBP|%|x>",
       "category": "<resultat|balanse|kontantstrøm|nøkkeltall>",
       "confidence": "<high|medium|low>"
     }
   ]
 }
-
-Bruk disse metrikknavnene der tilgjengelig:
-- resultat: driftsinntekter, driftsresultat, ebitda, resultat_for_skatt, aarsresultat, resultat_per_aksje
-- balanse: sum_eiendeler, egenkapital, total_gjeld, kontanter, egenkapitalandel
-- kontantstrøm: operasjonell_kontantstrom, investeringsaktiviteter, finansieringsaktiviteter, fri_kontantstrom, netto_endring_kontanter
-- nøkkeltall: driftsmargin, ebitda_margin, netto_margin, roe, roa, gjeldsgrad
 
 Returner KUN gyldig JSON, ingen annen tekst.`;
 
@@ -300,7 +337,7 @@ export async function extractFinancialData(markdown: string): Promise<Extraction
   const { getOpenAI } = await import("./openai");
 
   // Extract only financially relevant sections instead of sending entire document
-  const financialContent = stripNumericCommas(extractFinancialSections(markdown));
+  const financialContent = prepareStructuredInput(markdown);
 
   const response = await getOpenAI().chat.completions.create({
     model: "gpt-4o",
@@ -333,6 +370,8 @@ export async function extractFinancialData(markdown: string): Promise<Extraction
   if (rejected.length > 0) {
     console.warn("Rejected metrics:", rejected);
   }
+
+  checkCompleteness(valid, financialContent);
 
   return {
     period,
