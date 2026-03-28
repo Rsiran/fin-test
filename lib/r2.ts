@@ -24,15 +24,17 @@ const s3 = new S3Client({
  */
 export async function getPresignedUploadUrl(
   key: string,
-  contentLength: number
+  _contentLength: number
 ): Promise<string> {
   const command = new PutObjectCommand({
     Bucket: R2_BUCKET_NAME,
     Key: key,
     ContentType: "application/pdf",
-    ContentLength: contentLength,
   });
-  return getSignedUrl(s3, command, { expiresIn: 900 }); // 15 minutes
+  return getSignedUrl(s3, command, {
+    expiresIn: 900, // 15 minutes
+    signableHeaders: new Set(["content-type"]),
+  });
 }
 
 /**
