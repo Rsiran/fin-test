@@ -29,12 +29,8 @@ export async function getPresignedUploadUrl(
   const command = new PutObjectCommand({
     Bucket: R2_BUCKET_NAME,
     Key: key,
-    ContentType: "application/pdf",
   });
-  return getSignedUrl(s3, command, {
-    expiresIn: 900, // 15 minutes
-    signableHeaders: new Set(["content-type"]),
-  });
+  return getSignedUrl(s3, command, { expiresIn: 900 }); // 15 minutes
 }
 
 /**
