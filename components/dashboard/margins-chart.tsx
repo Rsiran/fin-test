@@ -38,8 +38,8 @@ export function MarginsChart({ data }: MarginsChartProps) {
           <Tooltip contentStyle={TOOLTIP_STYLE} />
           <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: "11px", color: "#AAAAAA" }} />
           <Line type="monotone" dataKey="driftsmargin" name="Driftsmargin" stroke="#5eead4" strokeWidth={2} dot={false} animationDuration={500} />
-          <Line type="monotone" dataKey="ebitda_margin" name="EBITDA" stroke="#14b8a6" strokeWidth={1.5} dot={false} animationDuration={500} />
-          <Line type="monotone" dataKey="netto_margin" name="Netto" stroke="#1a8a7d" strokeWidth={1.5} dot={false} animationDuration={500} />
+          <Line type="monotone" dataKey="ebitda_margin" name="EBITDA" stroke="#a78bfa" strokeWidth={2} dot={false} animationDuration={500} />
+          <Line type="monotone" dataKey="netto_margin" name="Netto" stroke="#fbbf24" strokeWidth={2} dot={false} animationDuration={500} />
         </LineChart>
       </ResponsiveContainer>
     </div>
