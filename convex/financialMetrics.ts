@@ -68,10 +68,10 @@ export const getByCompany = query({
     for (const period of periods) {
       const periodMetrics = stored.filter((m) => m.period === period);
       for (const ratio of DERIVED_RATIOS) {
-        // Skip if already stored
-        if (periodMetrics.some((m) => m.metricName === ratio.name)) continue;
-        const num = periodMetrics.find((m) => m.metricName === ratio.numerator);
-        const den = periodMetrics.find((m) => m.metricName === ratio.denominator);
+        // Skip if already stored (case-insensitive)
+        if (periodMetrics.some((m) => m.metricName.toLowerCase() === ratio.name)) continue;
+        const num = periodMetrics.find((m) => m.metricName.toLowerCase() === ratio.numerator);
+        const den = periodMetrics.find((m) => m.metricName.toLowerCase() === ratio.denominator);
         if (!num || !den || den.value === 0) continue;
         derived.push({
           _id: `derived_${ratio.name}_${period}` as typeof stored[0]["_id"],

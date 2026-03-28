@@ -37,9 +37,9 @@ export function MarginsChart({ data }: MarginsChartProps) {
           <YAxis tick={{ fontSize: 11, fill: "#666666", fontFamily: "var(--font-mono)" }} unit="%" axisLine={false} tickLine={false} />
           <Tooltip contentStyle={TOOLTIP_STYLE} />
           <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: "11px", color: "#AAAAAA" }} />
-          <Line type="monotone" dataKey="driftsmargin" name="Driftsmargin" stroke="#5eead4" strokeWidth={2} dot={false} animationDuration={500} />
-          <Line type="monotone" dataKey="ebitda_margin" name="EBITDA" stroke="#a78bfa" strokeWidth={2} dot={false} animationDuration={500} />
-          <Line type="monotone" dataKey="netto_margin" name="Netto" stroke="#fbbf24" strokeWidth={2} dot={false} animationDuration={500} />
+          <Line type="monotone" dataKey="driftsmargin" name="Driftsmargin" stroke="#5eead4" strokeWidth={2} dot={false} animationDuration={500} connectNulls />
+          <Line type="monotone" dataKey="ebitda_margin" name="EBITDA" stroke="#a78bfa" strokeWidth={2} dot={false} animationDuration={500} connectNulls />
+          <Line type="monotone" dataKey="netto_margin" name="Netto" stroke="#fbbf24" strokeWidth={2} dot={false} animationDuration={500} connectNulls />
         </LineChart>
       </ResponsiveContainer>
     </div>
