@@ -77,6 +77,63 @@ function fixBalanceSheetMagnitude(metrics: ExtractedMetric[]): ExtractedMetric[]
   return metrics;
 }
 
+/**
+ * Log warnings for expected metrics that are missing from extraction.
+ * Does not block storage — informational only.
+ */
+export function checkCompleteness(
+  metrics: ExtractedMetric[],
+  structuredInput: string
+): void {
+  const expectedIfPresent: { metric: string; tableSignal: string }[] = [
+    { metric: "driftsinntekter", tableSignal: "revenue" },
+    { metric: "driftsresultat", tableSignal: "operating result" },
+    { metric: "ebitda", tableSignal: "ebitda" },
+    { metric: "aarsresultat", tableSignal: "profit" },
+    { metric: "sum_eiendeler", tableSignal: "total assets" },
+    { metric: "egenkapital", tableSignal: "total equity" },
+  ];
+
+  const inputLower = structuredInput.toLowerCase();
+  const extractedNames = new Set(metrics.map((m) => m.metricName));
+
+  for (const { metric, tableSignal } of expectedIfPresent) {
+    if (!extractedNames.has(metric) && inputLower.includes(tableSignal)) {
+      console.warn(
+        `[completeness] "${metric}" missing from extraction but "${tableSignal}" present in input`
+      );
+    }
+  }
+}
+
+/**
+ * Compare new metrics against historical values for the same company.
+ * Logs warnings for suspicious magnitude changes (>10x).
+ */
+export function checkMagnitude(
+  newMetrics: ExtractedMetric[],
+  historicalMetrics: { metricName: string; value: number }[]
+): void {
+  if (historicalMetrics.length === 0) return;
+
+  const histMap = new Map<string, number>();
+  for (const m of historicalMetrics) {
+    histMap.set(m.metricName, m.value);
+  }
+
+  for (const metric of newMetrics) {
+    const hist = histMap.get(metric.metricName);
+    if (hist === undefined || hist === 0 || metric.unit === "%") continue;
+    const ratio = Math.abs(metric.value / hist);
+    if (ratio > 10 || ratio < 0.1) {
+      console.warn(
+        `[magnitude] "${metric.metricName}" changed ${ratio.toFixed(1)}x: ` +
+        `${hist} → ${metric.value} ${metric.unit}`
+      );
+    }
+  }
+}
+
 export function validateMetrics(metrics: ExtractedMetric[]): ValidationResult {
   // First fix any magnitude errors using accounting identities
   const fixed = fixBalanceSheetMagnitude(metrics);
@@ -313,6 +370,8 @@ export async function extractFinancialData(markdown: string): Promise<Extraction
   if (rejected.length > 0) {
     console.warn("Rejected metrics:", rejected);
   }
+
+  checkCompleteness(valid, financialContent);
 
   return {
     period,
