@@ -27,6 +27,22 @@ describe("canonicalizePeriod", () => {
     expect(canonicalizePeriod("9M2025")).toBe("2025-9M");
   });
 
+  it("handles digit-Q-year format (1Q 2025)", () => {
+    expect(canonicalizePeriod("1Q 2025")).toBe("2025-Q1");
+    expect(canonicalizePeriod("4Q 2025")).toBe("2025-Q4");
+    expect(canonicalizePeriod("2Q2024")).toBe("2024-Q2");
+  });
+
+  it("handles 6M format", () => {
+    expect(canonicalizePeriod("6M 2024")).toBe("2024-H1");
+    expect(canonicalizePeriod("6m2025")).toBe("2025-H1");
+  });
+
+  it("handles 12M format", () => {
+    expect(canonicalizePeriod("12M 2024")).toBe("2024-FY");
+    expect(canonicalizePeriod("12m 2023")).toBe("2023-FY");
+  });
+
   it("returns input unchanged if unrecognized", () => {
     expect(canonicalizePeriod("unknown format")).toBe("unknown format");
   });
