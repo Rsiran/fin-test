@@ -24,43 +24,15 @@ export function ChatWorkspace({ companyId, sessionId, companyName }: ChatWorkspa
   const [streamingSources, setStreamingSources] = useState<SourceMeta[]>([]);
   const [streamingChart, setStreamingChart] = useState<ChartConfig | null>(null);
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
-  const [activeSourceIndex, setActiveSourceIndex] = useState<number | null>(null);
-  const [allSources, setAllSources] = useState<SourceMeta[]>([]);
+  const [activeSource, setActiveSource] = useState<SourceMeta | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streaming, activeSourceIndex, pendingUserMessage]);
-
-  // Collect all sources from all assistant messages + streaming
-  useEffect(() => {
-    const collected: SourceMeta[] = [];
-    if (messages) {
-      for (const msg of messages) {
-        if (msg.role === "assistant" && msg.sources) {
-          msg.sources.forEach((s: { chunkId: string; content: string; pageRange?: string }) => {
-            if (!collected.find((c) => c.chunkId === s.chunkId)) {
-              collected.push({
-                index: collected.length + 1,
-                chunkId: s.chunkId,
-                content: s.content,
-                pageRange: s.pageRange,
-              });
-            }
-          });
-        }
-      }
-    }
-    for (const s of streamingSources) {
-      if (!collected.find((c) => c.chunkId === s.chunkId)) {
-        collected.push({ ...s, index: collected.length + 1 });
-      }
-    }
-    setAllSources(collected);
-  }, [messages, streamingSources]);
+  }, [messages, streaming, activeSource, pendingUserMessage]);
 
   const handleCiteClick = useCallback((source: SourceMeta) => {
-    setActiveSourceIndex((prev) => (prev === source.index ? null : source.index));
+    setActiveSource((prev) => (prev?.index === source.index ? null : source));
   }, []);
 
   const getSourcesForMessage = useCallback(
@@ -211,9 +183,8 @@ export function ChatWorkspace({ companyId, sessionId, companyName }: ChatWorkspa
 
       {/* Right: Sources pane */}
       <SourcesPanel
-        sources={allSources}
-        activeSourceIndex={activeSourceIndex}
-        onSourceClick={handleCiteClick}
+        source={activeSource}
+        onClose={() => setActiveSource(null)}
       />
     </div>
   );
