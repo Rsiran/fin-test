@@ -398,7 +398,7 @@ ${numberedContext}`;
         }
       }
 
-      // Extract which source indices GPT actually cited: [1], [2], [Kilde 3], etc.
+      // Extract which source indices GPT actually cited and renumber them consecutively
       const citedIndices = new Set<number>();
       const citePattern = /\[(?:Kilde\s*)?(\d+)\]/g;
       let match;
@@ -406,8 +406,28 @@ ${numberedContext}`;
         citedIndices.add(parseInt(match[1], 10));
       }
 
-      // Filter to only cited sources
-      const citedSources = sourceMeta.filter((s) => citedIndices.has(s.index));
+      // Build a map from old index → new consecutive index
+      const citedArray = [...citedIndices].sort((a, b) => a - b);
+      const renumberMap = new Map<number, number>();
+      citedArray.forEach((oldIdx, i) => renumberMap.set(oldIdx, i + 1));
+
+      // Renumber citations in the response text
+      fullResponse = fullResponse.replace(
+        /\[(?:Kilde\s*)?(\d+)\]/g,
+        (original, num) => {
+          const newIdx = renumberMap.get(parseInt(num, 10));
+          return newIdx ? `[${newIdx}]` : original;
+        }
+      );
+
+      // Filter and renumber sources
+      const citedSources = citedArray
+        .map((oldIdx) => {
+          const src = sourceMeta.find((s) => s.index === oldIdx);
+          if (!src) return null;
+          return { ...src, index: renumberMap.get(oldIdx)! };
+        })
+        .filter((s): s is NonNullable<typeof s> => s !== null);
 
       // Send cited sources after streaming completes
       if (citedSources.length > 0) {
