@@ -246,7 +246,7 @@ export async function POST(req: NextRequest) {
       if (title) {
         convex.mutation(api.chatSessions.updateTitle, { sessionId, title });
       }
-    }).catch(() => {});
+    }).catch((err) => console.error("Title generation failed:", err));
   }
 
   const systemPrompt = `Du er en ekspert norsk finansanalytiker. Du har tilgang til to typer data:

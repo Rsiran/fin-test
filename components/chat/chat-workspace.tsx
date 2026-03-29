@@ -36,6 +36,10 @@ export function ChatWorkspace({ companyId, sessionId, companyName, sessions, onS
   const [showSessions, setShowSessions] = useState(false);
   const [messageCountAtSubmit, setMessageCountAtSubmit] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const streamingRef = useRef(streaming);
+  const messageCountRef = useRef(messageCountAtSubmit);
+  streamingRef.current = streaming;
+  messageCountRef.current = messageCountAtSubmit;
 
   // Clear optimistic message and streaming once Convex has the persisted versions
   useEffect(() => {
@@ -48,7 +52,7 @@ export function ChatWorkspace({ companyId, sessionId, companyName, sessions, onS
     }
 
     // Clear streaming text when a NEW assistant message appears (message count grew past submit point)
-    if (streaming && messageCountAtSubmit !== null && messages.length > messageCountAtSubmit + 1 && last.role === "assistant") {
+    if (streamingRef.current && messageCountRef.current !== null && messages.length > messageCountRef.current + 1 && last.role === "assistant") {
       setStreaming("");
       setStreamingSources([]);
       setStreamingChart(null);
@@ -291,6 +295,7 @@ export function ChatWorkspace({ companyId, sessionId, companyName, sessions, onS
           value={input}
           onChange={setInput}
           onSubmit={handleSubmit}
+          onSuggestionClick={(s) => sendMessage(s)}
           disabled={isLoading}
           suggestions={suggestions}
         />

@@ -7,11 +7,12 @@ interface ChatInputProps {
   value: string;
   onChange: (value: string) => void;
   onSubmit: () => void;
+  onSuggestionClick?: (suggestion: string) => void;
   disabled?: boolean;
   suggestions?: string[];
 }
 
-export function ChatInput({ value, onChange, onSubmit, disabled, suggestions }: ChatInputProps) {
+export function ChatInput({ value, onChange, onSubmit, onSuggestionClick, disabled, suggestions }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const adjustHeight = useCallback(() => {
@@ -29,8 +30,12 @@ export function ChatInput({ value, onChange, onSubmit, disabled, suggestions }: 
   };
 
   const handleSuggestionClick = (suggestion: string) => {
-    onChange(suggestion);
-    textareaRef.current?.focus();
+    if (onSuggestionClick) {
+      onSuggestionClick(suggestion);
+    } else {
+      onChange(suggestion);
+      textareaRef.current?.focus();
+    }
   };
 
   return (

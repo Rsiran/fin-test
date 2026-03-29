@@ -26,7 +26,7 @@ export function DashboardTabs({ companyId, companyName }: { companyId: Id<"compa
   );
 
   return (
-    <div className={activeTab === "chat" ? "flex flex-col h-[calc(100vh-57px)] overflow-hidden" : ""}>
+    <div className={activeTab === "chat" ? "flex flex-col h-full overflow-hidden" : ""}>
       <div className="border-b border-white/5 flex flex-shrink-0">
         {TABS.map((tab) => {
           const Icon = tab.icon;
