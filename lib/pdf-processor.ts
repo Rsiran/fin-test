@@ -23,6 +23,10 @@ export async function convertPdfToMarkdown(pdfBuffer: Buffer): Promise<string> {
       format: "markdown",
       imageOutput: "off",
       contentSafetyOff: "hidden-text",
+      ...(process.env.DOCLING_SERVE_URL && {
+        hybrid: "docling-fast",
+        hybridUrl: process.env.DOCLING_SERVE_URL,
+      }),
       quiet: true,
     });
 
