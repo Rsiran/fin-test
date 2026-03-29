@@ -30,7 +30,7 @@ export function ChatWorkspace({ companyId, sessionId, companyName }: ChatWorkspa
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streaming, activeSourceIndex]);
+  }, [messages, streaming, activeSourceIndex, pendingUserMessage]);
 
   // Collect all sources from all assistant messages + streaming
   useEffect(() => {
