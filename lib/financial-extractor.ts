@@ -350,17 +350,22 @@ Bruk KUN disse navnene:
 
 Kartlegging:
 - Revenue / Total revenue / Operating revenues → "driftsinntekter"
-- Operating profit / EBIT / Operating result → "driftsresultat"
+- Operating profit / EBIT / Operating result / Operating profit / loss → "driftsresultat"
 - Gross operating profit / EBITDA → "ebitda"
-- Profit before tax / Resultat før skatt → "resultat_for_skatt"
-- Profit / Net income / Profit for the period → "aarsresultat"
+- Profit before tax / Profit / loss before taxes → "resultat_for_skatt" (bruk TOTAL, inkludert discontinued operations)
+- Profit / loss / Net income / Profit for the period → "aarsresultat" (bruk TOTAL Profit/loss, IKKE bare "from continuing operations")
+- Earnings per share / Basic EPS → "resultat_per_aksje" (bruk TOTAL, ikke bare continuing operations)
 - Total assets / Sum eiendeler → "sum_eiendeler"
-- Equity / Total equity → "egenkapital"
+- Equity / Total equity / Equity attributable to owners → "egenkapital" (bruk TOTAL equity inkl. non-controlling interests)
 - Total liabilities → "total_gjeld" (beregn som Total assets - Equity hvis ikke oppgitt direkte)
 - Cash / Cash and cash equivalents → "kontanter"
-- Net cash flow from operating activities → "operasjonell_kontantstrom"
-- Net cash flow from investing activities → "investeringsaktiviteter"
-- Net cash flow from financing activities → "finansieringsaktiviteter"
+- Net cash flow from operating activities → "operasjonell_kontantstrom" (bruk TOTAL, ikke bare continuing operations)
+- Net cash flow from investing activities → "investeringsaktiviteter" (bruk TOTAL)
+- Net cash flow from financing activities → "finansieringsaktiviteter" (bruk TOTAL)
+- Net increase / decrease in cash → "netto_endring_kontanter"
+
+VIKTIG OM DISCONTINUED OPERATIONS:
+Noen selskaper har "discontinued operations". Bruk ALLTID totaltallene (continuing + discontinued), IKKE bare "from continuing operations". Linjen "Profit / loss (-)" eller "Profit for the period" er totalen.
 
 OPPGAVE 4 — NORMALISER VERDIER:
 Se etter enhetsangivelse som "(NOK million)", "(NOK 1000)", "EUR'000" etc.
