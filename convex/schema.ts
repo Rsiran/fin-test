@@ -95,6 +95,7 @@ export default defineSchema({
         })
       )
     ),
+    chart: v.optional(v.any()),
     createdAt: v.number(),
   }).index("by_session", ["sessionId"]),
 
