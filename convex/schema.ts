@@ -38,6 +38,7 @@ export default defineSchema({
     periodScope: v.optional(v.string()),  // "standalone" | "cumulative"
     periodEvidence: v.optional(v.string()),
     normalizationWarning: v.optional(v.string()),
+    extractionQuality: v.optional(v.number()),
     createdAt: v.number(),
     uploadedBy: v.optional(v.id("users")),
   }).index("by_company", ["companyId"]),
