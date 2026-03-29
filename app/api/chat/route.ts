@@ -65,6 +65,30 @@ const CHART_TOOL = {
   },
 };
 
+const CLARIFICATION_TOOL = {
+  type: "function" as const,
+  function: {
+    name: "ask_clarification",
+    description:
+      "Ask the user a clarifying question before creating a visualization. Use this when the user requests a graph but you need to know their preference for chart type, time period, or which metrics to show. Ask ONE concise question with 2-4 clickable options.",
+    parameters: {
+      type: "object",
+      properties: {
+        question: {
+          type: "string",
+          description: "The question to ask, in Norwegian. Keep it short.",
+        },
+        options: {
+          type: "array",
+          items: { type: "string" },
+          description: "2-4 short clickable options in Norwegian",
+        },
+      },
+      required: ["question", "options"],
+    },
+  },
+};
+
 function formatMetricsSummary(metrics: FinancialMetric[]): string {
   if (metrics.length === 0) return "";
 
@@ -227,7 +251,8 @@ Regler:
 - Formater tall med norsk format (komma som desimalskilletegn)
 - Beregn endringer, vekstrater og marginer når det er relevant
 - Aldri si "informasjonen er ikke tilgjengelig" hvis tallene finnes — sjekk BÅDE nøkkeltall og kilder
-- Når brukeren ber om en graf, trend, eller visuell fremstilling, bruk create_chart-verktøyet med korrekte data fra nøkkeltallene/kildene. Gi ALLTID en tekstforklaring i tillegg til grafen.
+- Når brukeren ber om en graf, trend, eller visuell fremstilling: bruk FØRST ask_clarification for å spørre brukeren om preferanser (f.eks. graftype, tidsperiode, eller hvilke metrikker). Still ÉTT kort spørsmål med 2-4 valgalternativer. Når brukeren har svart, bruk create_chart med korrekte data. Gi ALLTID en tekstforklaring i tillegg til grafen.
+- IKKE bruk ask_clarification hvis brukeren allerede har spesifisert hva de vil ha (f.eks. "vis linjegraf over inntekter siste 5 år").
 
 ${metricsSummary}
 Kilder fra rapporter:
@@ -266,7 +291,7 @@ ${numberedContext}`;
       model: "gpt-4o",
       stream: true,
       messages: chatMessages,
-      tools: [CHART_TOOL],
+      tools: [CHART_TOOL, CLARIFICATION_TOOL],
     });
   } catch (err: unknown) {
     const code = (err as { code?: string })?.code;
@@ -284,6 +309,7 @@ ${numberedContext}`;
     async start(controller) {
 
       let toolCallId = "";
+      let toolCallName = "";
       let toolCallArgs = "";
 
       for await (const chunk of stream) {
@@ -293,6 +319,7 @@ ${numberedContext}`;
         if (delta?.tool_calls?.[0]) {
           const tc = delta.tool_calls[0];
           if (tc.id) toolCallId = tc.id;
+          if (tc.function?.name) toolCallName = tc.function.name;
           if (tc.function?.arguments) toolCallArgs += tc.function.arguments;
         }
 
@@ -306,54 +333,67 @@ ${numberedContext}`;
         }
       }
 
-      // If tool was called, parse chart and get commentary
+      // Handle tool calls
       if (toolCallId && toolCallArgs) {
         try {
-          chartData = JSON.parse(toolCallArgs);
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ chart: chartData })}\n\n`)
-          );
+          const toolResult = JSON.parse(toolCallArgs);
 
-          // Second call: provide tool result so GPT can give commentary
-          const followUp = await getOpenAI().chat.completions.create({
-            model: "gpt-4o",
-            stream: true,
-            messages: [
-              ...chatMessages,
-              {
-                role: "assistant" as const,
-                content: null,
-                tool_calls: [
-                  {
-                    id: toolCallId,
-                    type: "function" as const,
-                    function: {
-                      name: "create_chart",
-                      arguments: toolCallArgs,
+          if (toolCallName === "ask_clarification") {
+            // Send question as streamed content + clarification options
+            fullResponse = toolResult.question;
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ content: toolResult.question })}\n\n`)
+            );
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ clarification: { question: toolResult.question, options: toolResult.options } })}\n\n`)
+            );
+          } else if (toolCallName === "create_chart") {
+            chartData = toolResult;
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ chart: chartData })}\n\n`)
+            );
+
+            // Second call: get commentary about the chart
+            const followUp = await getOpenAI().chat.completions.create({
+              model: "gpt-4o",
+              stream: true,
+              messages: [
+                ...chatMessages,
+                {
+                  role: "assistant" as const,
+                  content: null,
+                  tool_calls: [
+                    {
+                      id: toolCallId,
+                      type: "function" as const,
+                      function: {
+                        name: "create_chart",
+                        arguments: toolCallArgs,
+                      },
                     },
-                  },
-                ],
-              },
-              {
-                role: "tool" as const,
-                tool_call_id: toolCallId,
-                content: `Grafen "${chartData!.title}" er opprettet og vist til brukeren. Gi nå en kort tekstlig analyse og forklaring av dataene i grafen. Bruk kildehenvisninger.`,
-              },
-            ],
-            tools: [CHART_TOOL],
-          });
+                  ],
+                },
+                {
+                  role: "tool" as const,
+                  tool_call_id: toolCallId,
+                  content: `Grafen "${chartData!.title}" er opprettet og vist til brukeren. Gi nå en kort tekstlig analyse og forklaring av dataene i grafen. Bruk kildehenvisninger.`,
+                },
+              ],
+              tools: [CHART_TOOL, CLARIFICATION_TOOL],
+            });
 
-          for await (const chunk of followUp) {
-            const content = chunk.choices[0]?.delta?.content || "";
-            if (content) {
-              fullResponse += content;
-              controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({ content })}\n\n`)
-              );
+            for await (const chunk of followUp) {
+              const content = chunk.choices[0]?.delta?.content || "";
+              if (content) {
+                fullResponse += content;
+                controller.enqueue(
+                  encoder.encode(`data: ${JSON.stringify({ content })}\n\n`)
+                );
+              }
             }
           }
         } catch {
-          // If chart parsing fails, continue without chart
+          // If tool parsing fails, continue without it
         }
       }
 

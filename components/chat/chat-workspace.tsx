@@ -32,6 +32,7 @@ export function ChatWorkspace({ companyId, sessionId, companyName, sessions, onS
   const [activeSource, setActiveSource] = useState<SourceMeta | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [clarification, setClarification] = useState<{ question: string; options: string[] } | null>(null);
   const [showSessions, setShowSessions] = useState(false);
   const [messageCountAtSubmit, setMessageCountAtSubmit] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -88,6 +89,7 @@ export function ChatWorkspace({ companyId, sessionId, companyName, sessions, onS
     setStreamingSources([]);
     setStreamingChart(null);
     setSuggestions([]);
+    setClarification(null);
     setError(null);
 
     try {
@@ -123,6 +125,7 @@ export function ChatWorkspace({ companyId, sessionId, companyName, sessions, onS
             if (parsed.sources) setStreamingSources(parsed.sources);
             if (parsed.chart) setStreamingChart(parsed.chart);
             if (parsed.suggestions) setSuggestions(parsed.suggestions);
+            if (parsed.clarification) setClarification(parsed.clarification);
             if (parsed.content) setStreaming((prev) => prev + parsed.content);
           } catch {}
         }
@@ -130,6 +133,59 @@ export function ChatWorkspace({ companyId, sessionId, companyName, sessions, onS
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleOptionClick = (option: string) => {
+    setClarification(null);
+    setInput(option);
+    // Auto-submit after a tick so the input state is set
+    setTimeout(() => {
+      setInput("");
+      setPendingUserMessage(option);
+      setMessageCountAtSubmit(messages?.length ?? 0);
+      setIsLoading(true);
+      setStreaming("");
+      setStreamingSources([]);
+      setStreamingChart(null);
+      setSuggestions([]);
+      setClarification(null);
+      setError(null);
+
+      fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: option, companyId, sessionId }),
+      }).then(async (response) => {
+        if (!response.ok) {
+          const err = await response.json().catch(() => null);
+          setError(err?.error || "Noe gikk galt");
+          return;
+        }
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+        if (!reader) return;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const text = decoder.decode(value);
+          const lines = text.split("\n").filter((l) => l.startsWith("data: "));
+          for (const line of lines) {
+            const data = line.slice(6);
+            if (data === "[DONE]") break;
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.sources) setStreamingSources(parsed.sources);
+              if (parsed.chart) setStreamingChart(parsed.chart);
+              if (parsed.suggestions) setSuggestions(parsed.suggestions);
+              if (parsed.clarification) setClarification(parsed.clarification);
+              if (parsed.content) setStreaming((prev) => prev + parsed.content);
+            } catch {}
+          }
+        }
+      }).finally(() => {
+        setIsLoading(false);
+      });
+    }, 0);
   };
 
   const currentSession = sessions.find((s) => s._id === sessionId);
@@ -253,8 +309,23 @@ export function ChatWorkspace({ companyId, sessionId, companyName, sessions, onS
               sources={streamingSources}
               chart={streamingChart ?? undefined}
               onCiteClick={handleCiteClick}
-              isStreaming
+              isStreaming={!clarification}
             />
+          )}
+
+          {/* Clarification options */}
+          {clarification && !isLoading && (
+            <div className="self-start animate-fade-in-up flex flex-wrap gap-2 ml-1">
+              {clarification.options.map((option) => (
+                <button
+                  key={option}
+                  onClick={() => handleOptionClick(option)}
+                  className="px-3 py-1.5 text-[12px] bg-accent/[0.06] text-accent border border-accent/[0.2] rounded-md hover:bg-accent/[0.15] hover:border-accent/[0.35] transition-colors cursor-pointer"
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
           )}
 
           <div ref={messagesEndRef} />
