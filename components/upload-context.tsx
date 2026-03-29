@@ -106,6 +106,7 @@ export function UploadProvider({
       for (const { id, file, skip } of fileEntries) {
         if (skip) continue;
 
+        let docId: string | null = null;
         try {
           const presignRes = await fetch("/api/upload/presign", {
             method: "POST",
@@ -120,9 +121,10 @@ export function UploadProvider({
             const err = await presignRes.json();
             throw new Error(err.error || "Kunne ikke starte opplasting");
           }
-          const { uploadUrl, docId } = await presignRes.json();
+          const presignData = await presignRes.json();
+          docId = presignData.docId;
 
-          await uploadToR2(uploadUrl, file, (pct) => {
+          await uploadToR2(presignData.uploadUrl, file, (pct) => {
             updateResult(id, { progress: pct });
           });
 
@@ -141,8 +143,6 @@ export function UploadProvider({
           if (processData.status === "ready") {
             updateResult(id, { status: "ready" });
           } else if (processData.status === "processing") {
-            // Handed off to background — remove from local upload results.
-            // DocumentsTab reactive query shows real processing status.
             setResults((prev) => prev.filter((r) => r.id !== id));
           } else {
             updateResult(id, {
@@ -151,13 +151,17 @@ export function UploadProvider({
             });
           }
         } catch (error) {
-          updateResult(id, {
-            status: "error",
-            error:
-              error instanceof Error
-                ? error.message
-                : "Opplasting feilet",
-          });
+          const errorMsg = error instanceof Error ? error.message : "Opplasting feilet";
+          updateResult(id, { status: "error", error: errorMsg });
+
+          // Mark the Convex document as error so it doesn't stay stuck as "processing"
+          if (docId) {
+            fetch("/api/upload/fail", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ docId, error: errorMsg }),
+            }).catch(() => {});
+          }
         }
       }
 
