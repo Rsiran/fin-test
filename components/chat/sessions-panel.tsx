@@ -1,6 +1,6 @@
 "use client";
 
-import { X, Plus, ChatCircle, Trash } from "@phosphor-icons/react";
+import { X, Plus, ChatCircle } from "@phosphor-icons/react";
 import { Id } from "@/convex/_generated/dataModel";
 
 interface Session {
