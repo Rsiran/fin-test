@@ -272,7 +272,7 @@ ${numberedContext}`;
     const code = (err as { code?: string })?.code;
     let errorMsg = "Noe gikk galt med AI-tjenesten. Prøv igjen senere.";
     if (code === "insufficient_quota") {
-      errorMsg = "Tomt for kreditter — kontakt Jonas.";
+      errorMsg = "OpenAI API error - Kontakt Jonas";
     }
     return new Response(JSON.stringify({ error: errorMsg }), {
       status: 500,
