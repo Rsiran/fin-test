@@ -72,7 +72,7 @@ const REACH_SUBSEA_EXCERPT = `
 
 describe("prepareStructuredInput", () => {
   it("excludes key figures summary and includes financial statements", () => {
-    const result = prepareStructuredInput(REACH_SUBSEA_EXCERPT);
+    const result = prepareStructuredInput(REACH_SUBSEA_EXCERPT).content;
     expect(result).toContain("EBITDA");
     expect(result).toContain("212180");
     expect(result).not.toContain("Revenue (NOKm)");
@@ -81,7 +81,7 @@ describe("prepareStructuredInput", () => {
   });
 
   it("includes unit context", () => {
-    const result = prepareStructuredInput(REACH_SUBSEA_EXCERPT);
+    const result = prepareStructuredInput(REACH_SUBSEA_EXCERPT).content;
     expect(result).toContain("thousands");
   });
 
@@ -94,7 +94,7 @@ describe("prepareStructuredInput", () => {
 |Revenue|1 338 842|
 |EBITDA|212 180|
 `;
-    const result = prepareStructuredInput(md);
+    const result = prepareStructuredInput(md).content;
     expect(result).toContain("1338842");
     expect(result).not.toContain("1 338 842");
     expect(result).toContain("212180");
@@ -107,7 +107,7 @@ describe("prepareStructuredInput", () => {
 
 (NOK million) 2025 2024 Operating revenues 2015 1916 EBITDA 394 332
 `;
-    const result = prepareStructuredInput(md);
+    const result = prepareStructuredInput(md).content;
     // Spaces between separate values must be preserved
     expect(result).toContain("2015 1916");
     expect(result).toContain("394 332");
@@ -119,7 +119,7 @@ describe("prepareStructuredInput", () => {
 
 EUR'000 2023 2022 Revenue 108,622 106,424 Cost of sales (59,858) (49,537)
 `;
-    const result = prepareStructuredInput(md);
+    const result = prepareStructuredInput(md).content;
     expect(result).toContain("108622");
     expect(result).toContain("106424");
     expect(result).not.toContain("108,622");
@@ -133,7 +133,7 @@ EUR'000 2023 2022 Revenue 108,622 106,424 Cost of sales (59,858) (49,537)
 |---|---|---|
 |Revenue|474 138|1 995 903|
 `;
-    const result = prepareStructuredInput(md);
+    const result = prepareStructuredInput(md).content;
     expect(result).toContain("474138");
     expect(result).toContain("1995903");
     // "Q4 2023" should not be collapsed (not a digit-space-3digits pattern)

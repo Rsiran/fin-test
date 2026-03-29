@@ -243,7 +243,7 @@ function extractFinancialSections(markdown: string, maxChars = 80000): string {
   return selected.map((s) => s.section).join("\n\n");
 }
 
-export function prepareStructuredInput(markdown: string): string {
+export function prepareStructuredInput(markdown: string): { content: string; usedStructuredPath: boolean } {
   const tables = parseMarkdownTables(markdown);
   const classified = tables.map((table) => ({
     table,
@@ -253,12 +253,16 @@ export function prepareStructuredInput(markdown: string): string {
   const structured = buildStructuredInput(resolved);
 
   if (!structured) {
-    // Fallback: only strip commas, NOT spaces (spaces separate column values in flat text)
-    return stripCommasOnly(extractFinancialSections(markdown));
+    return {
+      content: stripCommasOnly(extractFinancialSections(markdown)),
+      usedStructuredPath: false,
+    };
   }
 
-  // Structured tables: safe to strip both commas and spaces (one number per cell)
-  return stripNumericSeparators(structured);
+  return {
+    content: stripNumericSeparators(structured),
+    usedStructuredPath: true,
+  };
 }
 
 const EXTRACTION_PROMPT = `Du er en ekspert på norsk finansanalyse.
@@ -352,7 +356,7 @@ export async function extractFinancialData(markdown: string): Promise<Extraction
   const { getOpenAI } = await import("./openai");
 
   // Extract only financially relevant sections instead of sending entire document
-  const financialContent = prepareStructuredInput(markdown);
+  const { content: financialContent } = prepareStructuredInput(markdown);
 
   const response = await getOpenAI().chat.completions.create({
     model: "gpt-4o",
@@ -387,6 +391,55 @@ export async function extractFinancialData(markdown: string): Promise<Extraction
   }
 
   checkCompleteness(valid, financialContent);
+
+  return {
+    period,
+    reportType,
+    periodScope,
+    periodEvidence,
+    currency,
+    originalUnit,
+    unitEvidence,
+    metrics: valid,
+  };
+}
+
+/**
+ * Re-extract with feedback about missing metrics.
+ * Prepends missing-metric hints to the system prompt.
+ */
+export async function extractWithFeedback(
+  markdown: string,
+  missing: string[]
+): Promise<ExtractionResult> {
+  const { getOpenAI } = await import("./openai");
+
+  const { content: financialContent } = prepareStructuredInput(markdown);
+  const feedbackNote = `VIKTIG: Forrige ekstraksjonsforsøk manglet disse metrikkene som finnes i inndataen: ${missing.join(", ")}. Sørg for å ekstrahere ALLE tilgjengelige metrikker.`;
+
+  const response = await getOpenAI().chat.completions.create({
+    model: "gpt-4o",
+    messages: [
+      { role: "system", content: feedbackNote + "\n\n" + EXTRACTION_PROMPT },
+      { role: "user", content: financialContent },
+    ],
+    response_format: { type: "json_object" },
+    temperature: 0.1,
+  });
+
+  const content = response.choices[0].message.content;
+  if (!content) throw new Error("Empty response from GPT-4o");
+
+  const parsed = JSON.parse(content);
+  const period = canonicalizePeriod(parsed.period || "");
+  const reportType = parsed.reportType || "annet";
+  const currency = parsed.currency || undefined;
+  const originalUnit = parsed.originalUnit || undefined;
+  const unitEvidence = parsed.unitEvidence || undefined;
+  const periodScope = (parsed.periodScope === "cumulative" ? "cumulative" : "standalone") as "standalone" | "cumulative";
+  const periodEvidence = parsed.periodEvidence || undefined;
+
+  const { valid, rejected } = validateMetrics(parsed.metrics || []);
 
   return {
     period,
