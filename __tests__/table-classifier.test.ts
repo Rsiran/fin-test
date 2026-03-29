@@ -121,4 +121,33 @@ describe("classifyTable", () => {
       )
     ).toBe("balance_sheet");
   });
+
+  it("does not classify APM definition tables as income_statement", () => {
+    expect(
+      classifyTable(
+        makeTable({
+          heading: "Alternative Performance Measures",
+          headerRow: ["Measure", "Description", "Reason for including"],
+          rows: [
+            { label: "EBITDA", values: ["Earnings before interest, taxes, depreciation and amortization", "Shows operational profitability"] },
+            { label: "Adjusted EBITDA", values: ["EBITDA adjusted for special items", "Comparable performance"] },
+          ],
+        })
+      )
+    ).toBe("other");
+  });
+
+  it("still classifies tables with numeric values as income_statement", () => {
+    expect(
+      classifyTable(
+        makeTable({
+          heading: "Income statement",
+          rows: [
+            { label: "Revenue", values: ["606 077", "684 809"] },
+            { label: "EBITDA", values: ["228 315", "300 178"] },
+          ],
+        })
+      )
+    ).toBe("income_statement");
+  });
 });
