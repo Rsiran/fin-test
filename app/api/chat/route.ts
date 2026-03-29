@@ -363,42 +363,46 @@ ${numberedContext}`;
             );
 
             // Second call: get commentary about the chart
-            const followUp = await getOpenAI().chat.completions.create({
-              model: "gpt-4o",
-              stream: true,
-              messages: [
-                ...chatMessages,
-                {
-                  role: "assistant" as const,
-                  content: null,
-                  tool_calls: [
-                    {
-                      id: toolCallId,
-                      type: "function" as const,
-                      function: {
-                        name: "create_chart",
-                        arguments: toolCallArgs,
+            try {
+              const followUp = await getOpenAI().chat.completions.create({
+                model: "gpt-4o",
+                stream: true,
+                messages: [
+                  ...chatMessages,
+                  {
+                    role: "assistant" as const,
+                    content: null,
+                    tool_calls: [
+                      {
+                        id: toolCallId,
+                        type: "function" as const,
+                        function: {
+                          name: "create_chart",
+                          arguments: toolCallArgs,
+                        },
                       },
-                    },
-                  ],
-                },
-                {
-                  role: "tool" as const,
-                  tool_call_id: toolCallId,
-                  content: `Grafen "${chartData!.title}" er opprettet og vist til brukeren. Gi nå en kort tekstlig analyse og forklaring av dataene i grafen. Bruk kildehenvisninger.`,
-                },
-              ],
-              tools: [CHART_TOOL, CLARIFICATION_TOOL],
-            });
+                    ],
+                  },
+                  {
+                    role: "tool" as const,
+                    tool_call_id: toolCallId,
+                    content: `Grafen "${chartData!.title}" er opprettet og vist til brukeren. Gi nå en kort tekstlig analyse og forklaring av dataene i grafen. Bruk kildehenvisninger.`,
+                  },
+                ],
+                tools: [CHART_TOOL, CLARIFICATION_TOOL],
+              });
 
-            for await (const chunk of followUp) {
-              const content = chunk.choices[0]?.delta?.content || "";
-              if (content) {
-                fullResponse += content;
-                controller.enqueue(
-                  encoder.encode(`data: ${JSON.stringify({ content })}\n\n`)
-                );
+              for await (const chunk of followUp) {
+                const content = chunk.choices[0]?.delta?.content || "";
+                if (content) {
+                  fullResponse += content;
+                  controller.enqueue(
+                    encoder.encode(`data: ${JSON.stringify({ content })}\n\n`)
+                  );
+                }
               }
+            } catch {
+              // Follow-up commentary failed, continue with what we have
             }
           }
         } catch {
