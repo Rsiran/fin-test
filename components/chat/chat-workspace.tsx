@@ -31,6 +31,7 @@ export function ChatWorkspace({ companyId, sessionId, companyName, sessions, onS
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
   const [activeSource, setActiveSource] = useState<SourceMeta | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [showSessions, setShowSessions] = useState(false);
   const [messageCountAtSubmit, setMessageCountAtSubmit] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -87,6 +88,7 @@ export function ChatWorkspace({ companyId, sessionId, companyName, sessions, onS
     setStreamingSources([]);
     setStreamingChart(null);
     setSuggestions([]);
+    setError(null);
 
     try {
       const response = await fetch("/api/chat", {
@@ -94,6 +96,13 @@ export function ChatWorkspace({ companyId, sessionId, companyName, sessions, onS
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: question, companyId, sessionId }),
       });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => null);
+        const msg = err?.error || "Noe gikk galt";
+        setError(msg);
+        return;
+      }
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
@@ -220,6 +229,18 @@ export function ChatWorkspace({ companyId, sessionId, companyName, sessions, onS
                     <span className="thinking-dot" />
                   </span>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Error message */}
+          {error && (
+            <div className="self-start animate-fade-in-up">
+              <div className="font-mono text-[9px] tracking-[1.5px] uppercase text-negative/60 mb-1">
+                Feil
+              </div>
+              <div className="px-4 py-3 rounded-r-md border-l-2 border-negative/30 bg-negative/[0.05] text-[13px] text-negative/80">
+                {error}
               </div>
             </div>
           )}

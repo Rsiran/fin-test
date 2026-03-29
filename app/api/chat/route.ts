@@ -259,15 +259,29 @@ ${numberedContext}`;
     { role: "user" as const, content: message },
   ];
 
+  // Wrap in try/catch to handle OpenAI errors before starting stream
+  let stream;
+  try {
+    stream = await getOpenAI().chat.completions.create({
+      model: "gpt-4o",
+      stream: true,
+      messages: chatMessages,
+      tools: [CHART_TOOL],
+    });
+  } catch (err: unknown) {
+    const code = (err as { code?: string })?.code;
+    let errorMsg = "Noe gikk galt med AI-tjenesten. Prøv igjen senere.";
+    if (code === "insufficient_quota") {
+      errorMsg = "API-kreditter er brukt opp. Kontakt Jonas for å fylle på.";
+    }
+    return new Response(JSON.stringify({ error: errorMsg }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const readableStream = new ReadableStream({
     async start(controller) {
-      // First call — may produce a tool call or direct content
-      const stream = await getOpenAI().chat.completions.create({
-        model: "gpt-4o",
-        stream: true,
-        messages: chatMessages,
-        tools: [CHART_TOOL],
-      });
 
       let toolCallId = "";
       let toolCallArgs = "";
