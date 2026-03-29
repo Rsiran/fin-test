@@ -93,11 +93,15 @@ export const remove = mutation({
     const doc = await ctx.db.get(args.id);
     if (!doc) throw new Error("Dokument ikke funnet");
 
-    // Ownership check — only block if owned by a different user
-    if (doc.uploadedBy && doc.uploadedBy !== userId) {
+    // Admin emails can delete any document
+    const identity = await ctx.auth.getUserIdentity();
+    const adminEmails = ["s2419213@bi.no"];
+    const isAdmin = identity?.email && adminEmails.includes(identity.email);
+
+    // Ownership check — only block if owned by a different user (unless admin)
+    if (!isAdmin && doc.uploadedBy && doc.uploadedBy !== userId) {
       throw new Error("Du kan kun slette dokumenter du selv har lastet opp");
     }
-    // Legacy documents without uploadedBy can be deleted by any authenticated user
 
     // Delete chunks
     const chunks = await ctx.db
