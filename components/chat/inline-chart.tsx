@@ -63,7 +63,7 @@ export function InlineChart({ config }: { config: ChartConfig }) {
       (ds) => [ds.label, ...ds.values.map((v) => v.toString())].join(",")
     );
     const csv = [header, ...rows].join("\n");
-    navigator.clipboard.writeText(csv);
+    navigator.clipboard.writeText(csv).catch(() => {});
   };
 
   return (
