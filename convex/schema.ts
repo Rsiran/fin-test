@@ -94,6 +94,16 @@ export default defineSchema({
         })
       )
     ),
+    chart: v.optional(v.object({
+      type: v.union(v.literal("bar"), v.literal("line")),
+      title: v.string(),
+      labels: v.array(v.string()),
+      datasets: v.array(v.object({
+        label: v.string(),
+        values: v.array(v.number()),
+      })),
+      unit: v.optional(v.string()),
+    })),
     createdAt: v.number(),
   }).index("by_session", ["sessionId"]),
 
