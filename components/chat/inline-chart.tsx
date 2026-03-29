@@ -137,7 +137,7 @@ export function InlineChart({ config }: { config: ChartConfig }) {
                   tickLine={false}
                   width={45}
                 />
-                <Tooltip content={<ChartTooltipContent unit={config.unit} />} />
+                <Tooltip content={<ChartTooltipContent unit={config.unit} />} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
                 {config.datasets.map((ds, i) => (
                   <Bar
                     key={ds.label}
@@ -172,7 +172,7 @@ export function InlineChart({ config }: { config: ChartConfig }) {
                   tickLine={false}
                   width={45}
                 />
-                <Tooltip content={<ChartTooltipContent unit={config.unit} />} />
+                <Tooltip content={<ChartTooltipContent unit={config.unit} />} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
                 {config.datasets.map((ds) => (
                   <Area
                     key={`area-${ds.label}`}
