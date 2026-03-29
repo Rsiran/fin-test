@@ -174,14 +174,17 @@ export async function POST(req: NextRequest) {
   convex.setAuth(token);
 
   const body = await req.json();
-  const { message, companyId, sessionId } = body;
+  const { message, companyId: rawCompanyId, sessionId: rawSessionId } = body;
 
-  if (!message || typeof message !== "string" || !companyId || typeof companyId !== "string" || !sessionId || typeof sessionId !== "string") {
+  if (!message || typeof message !== "string" || !rawCompanyId || typeof rawCompanyId !== "string" || !rawSessionId || typeof rawSessionId !== "string") {
     return new Response(JSON.stringify({ error: "Ugyldig forespørsel" }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
     });
   }
+
+  const companyId = rawCompanyId as Id<"companies">;
+  const sessionId = rawSessionId as Id<"chatSessions">;
 
   const [existingMessages, allMetrics] = await Promise.all([
     convex.query(api.chatMessages.listBySession, { sessionId }),
