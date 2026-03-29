@@ -26,8 +26,8 @@ export function ChatTab({
   const activeSession = activeSessionId ?? sessions?.[0]?._id ?? null;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between flex-shrink-0 px-5 py-2">
         <div className="flex gap-2 overflow-x-auto">
           {sessions &&
             sessions.length > 1 &&
@@ -55,11 +55,13 @@ export function ChatTab({
       </div>
 
       {activeSession ? (
+        <div className="flex-1 min-h-0">
         <ChatWorkspace
           companyId={companyId}
           sessionId={activeSession}
           companyName={companyName}
         />
+        </div>
       ) : (
         <div className="text-center py-16">
           <p className="text-[#666666]">Ingen samtaler enda</p>

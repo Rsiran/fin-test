@@ -26,8 +26,8 @@ export function DashboardTabs({ companyId, companyName }: { companyId: Id<"compa
   );
 
   return (
-    <div>
-      <div className="border-b border-white/5 flex">
+    <div className={activeTab === "chat" ? "flex flex-col h-[calc(100vh-57px)] overflow-hidden" : ""}>
+      <div className="border-b border-white/5 flex flex-shrink-0">
         {TABS.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -60,7 +60,7 @@ export function DashboardTabs({ companyId, companyName }: { companyId: Id<"compa
       {activeTab === "oversikt" && <ReportFilterBar />}
       <UploadProvider companyId={companyId}>
         {activeTab === "chat" ? (
-          <div className="px-0">
+          <div className="flex-1 min-h-0">
             <ChatTab companyId={companyId} companyName={companyName} />
           </div>
         ) : (

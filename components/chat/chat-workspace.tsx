@@ -106,7 +106,7 @@ export function ChatWorkspace({ companyId, sessionId, companyName }: ChatWorkspa
   ];
 
   return (
-    <div className="flex h-[calc(100vh-110px)]">
+    <div className="flex h-full">
       {/* Left: Chat pane */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Terminal header */}
