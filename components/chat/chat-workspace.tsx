@@ -206,7 +206,7 @@ export function ChatWorkspace({ companyId, sessionId, companyName, sessions, onS
               </div>
               <div className="px-4 py-3 rounded-r-md border-l-2 border-white/[0.08] bg-white/[0.025]">
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-[11px] text-[#555]">Analyserer</span>
+                  <span className="font-mono text-[11px] text-[#555]">Tenker</span>
                   <span className="flex gap-1">
                     <span className="thinking-dot" />
                     <span className="thinking-dot" />
