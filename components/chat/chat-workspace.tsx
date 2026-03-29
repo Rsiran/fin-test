@@ -34,6 +34,16 @@ export function ChatWorkspace({ companyId, sessionId, companyName, sessions, onS
   const [showSessions, setShowSessions] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Clear optimistic message once Convex has the persisted version
+  useEffect(() => {
+    if (pendingUserMessage && messages?.length) {
+      const last = messages[messages.length - 1];
+      if (last.role === "user" && last.content === pendingUserMessage) {
+        setPendingUserMessage(null);
+      }
+    }
+  }, [messages, pendingUserMessage]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streaming, activeSource, pendingUserMessage]);
