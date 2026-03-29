@@ -18,28 +18,18 @@ export async function convertPdfToMarkdown(pdfBuffer: Buffer): Promise<string> {
   try {
     await writeFile(inputPath, pdfBuffer);
 
-    const hybridUrl = process.env.DOCLING_SERVE_URL;
-    if (hybridUrl) {
-      // Test connectivity before passing to Java CLI
-      try {
-        const health = await fetch(`${hybridUrl}/health`, { signal: AbortSignal.timeout(5000) });
-        console.log(`[hybrid] docling-serve health: ${health.status}`);
-      } catch (e) {
-        console.warn(`[hybrid] docling-serve unreachable at ${hybridUrl}:`, (e as Error).message);
-      }
-    }
-
     await convert([inputPath], {
       outputDir,
       format: "markdown",
       imageOutput: "off",
       contentSafetyOff: "hidden-text",
-      ...(hybridUrl && {
+      ...(process.env.DOCLING_SERVE_URL && {
         hybrid: "docling-fast",
-        hybridUrl,
+        hybridUrl: process.env.DOCLING_SERVE_URL,
         hybridTimeout: "120000",
         hybridFallback: true,
       }),
+      quiet: true,
     });
 
     const files = await readdir(outputDir);
