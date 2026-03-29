@@ -253,10 +253,10 @@ export function prepareStructuredInput(markdown: string): string {
   const structured = buildStructuredInput(resolved);
 
   if (!structured) {
-    return stripNumericCommas(extractFinancialSections(markdown));
+    return stripNumericSeparators(extractFinancialSections(markdown));
   }
 
-  return stripNumericCommas(structured);
+  return stripNumericSeparators(structured);
 }
 
 const EXTRACTION_PROMPT = `Du er en ekspert på norsk finansanalyse.
@@ -322,15 +322,22 @@ Returner et JSON-objekt:
 Returner KUN gyldig JSON, ingen annen tekst.`;
 
 /**
- * Strip commas from numbers in financial text to prevent LLM parsing errors.
- * "1,252,560" → "1252560", "EUR 1,253 million" → "EUR 1253 million"
- * Preserves commas in non-numeric contexts (e.g. natural language).
+ * Strip thousand separators (commas and spaces) from numbers in financial text
+ * to prevent LLM parsing errors.
+ * "1,252,560" → "1252560", "1 338 842" → "1338842", "212 180" → "212180"
+ * Preserves commas/spaces in non-numeric contexts (e.g. "Q4 2023", natural language).
  */
-function stripNumericCommas(text: string): string {
-  // Match numbers with comma-separated groups: 1,252,560 or 670,030
-  return text.replace(/\b(\d{1,3})(,\d{3})+\b/g, (match) =>
+function stripNumericSeparators(text: string): string {
+  // Strip comma-separated groups: 1,252,560 or 670,030
+  text = text.replace(/\b(\d{1,3})(,\d{3})+\b/g, (match) =>
     match.replace(/,/g, "")
   );
+  // Strip space-separated digit groups: 1 338 842 or 212 180
+  // Matches a leading group of 1-3 digits followed by one or more space+3-digit groups
+  text = text.replace(/\b(\d{1,3})((?:\s\d{3})+)\b/g, (match, first, rest) =>
+    first + rest.replace(/\s/g, "")
+  );
+  return text;
 }
 
 export async function extractFinancialData(markdown: string): Promise<ExtractionResult> {

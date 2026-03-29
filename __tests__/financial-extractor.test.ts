@@ -74,7 +74,7 @@ describe("prepareStructuredInput", () => {
   it("excludes key figures summary and includes financial statements", () => {
     const result = prepareStructuredInput(REACH_SUBSEA_EXCERPT);
     expect(result).toContain("EBITDA");
-    expect(result).toContain("212 180");
+    expect(result).toContain("212180");
     expect(result).not.toContain("Revenue (NOKm)");
     expect(result).toContain("BALANCE SHEET");
     expect(result).toContain("CASH FLOW");
@@ -83,5 +83,35 @@ describe("prepareStructuredInput", () => {
   it("includes unit context", () => {
     const result = prepareStructuredInput(REACH_SUBSEA_EXCERPT);
     expect(result).toContain("thousands");
+  });
+
+  it("collapses space-separated numbers in table values", () => {
+    const md = `
+## Income statement
+
+|Statement of profit or loss (NOK 1000)|Q4 2023|
+|---|---|
+|Revenue|1 338 842|
+|EBITDA|212 180|
+`;
+    const result = prepareStructuredInput(md);
+    expect(result).toContain("1338842");
+    expect(result).not.toContain("1 338 842");
+    expect(result).toContain("212180");
+  });
+
+  it("does not collapse spaces in non-numeric contexts", () => {
+    const md = `
+## Income statement
+
+|Statement of profit or loss (NOK 1000)|Q4 2023|12M 2025|
+|---|---|---|
+|Revenue|474 138|1 995 903|
+`;
+    const result = prepareStructuredInput(md);
+    expect(result).toContain("474138");
+    expect(result).toContain("1995903");
+    // "Q4 2023" should not be collapsed (not a digit-space-3digits pattern)
+    expect(result).toContain("Q4 2023");
   });
 });

@@ -68,6 +68,13 @@ function matchesAny(text: string, patterns: string[]): boolean {
   return patterns.some((p) => lower.includes(p));
 }
 
+/** Returns true if any value cell contains digits (excluding bare years like "2024"). */
+function hasNumericValues(table: ParsedTable): boolean {
+  return table.rows.some((row) =>
+    row.values.some((v) => /\d/.test(v) && !/^\d{4}$/.test(v.trim()))
+  );
+}
+
 export function classifyTable(table: ParsedTable): TableClass {
   const headingAndHeader = table.heading + " " + table.headerRow.join(" ");
   const rowLabels = table.rows.map((r) => r.label).join(" ");
@@ -77,10 +84,11 @@ export function classifyTable(table: ParsedTable): TableClass {
   if (matchesAny(headingAndHeader, BALANCE_HEADING)) return "balance_sheet";
   if (matchesAny(headingAndHeader, CASHFLOW_HEADING)) return "cash_flow";
 
-  // Check row labels for financial statement signals
-  if (matchesAny(rowLabels, INCOME_ROWS)) return "income_statement";
-  if (matchesAny(rowLabels, BALANCE_ROWS)) return "balance_sheet";
-  if (matchesAny(rowLabels, CASHFLOW_ROWS)) return "cash_flow";
+  // Check row labels for financial statement signals (require numeric data
+  // to avoid misclassifying text-only tables like APM definitions)
+  if (matchesAny(rowLabels, INCOME_ROWS) && hasNumericValues(table)) return "income_statement";
+  if (matchesAny(rowLabels, BALANCE_ROWS) && hasNumericValues(table)) return "balance_sheet";
+  if (matchesAny(rowLabels, CASHFLOW_ROWS) && hasNumericValues(table)) return "cash_flow";
 
   // Lower priority: summaries and notes
   if (matchesAny(headingAndHeader, SUMMARY_HEADING))
