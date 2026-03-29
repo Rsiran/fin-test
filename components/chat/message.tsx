@@ -23,7 +23,7 @@ export function Message({
   const isUser = role === "user";
 
   return (
-    <div className={`max-w-[90%] ${isUser ? "self-end" : "self-start"}`}>
+    <div className={`max-w-[90%] ${isUser ? "self-end" : "self-start"} animate-fade-in-up`}>
       {/* Label */}
       <div className="font-mono text-[9px] tracking-[1.5px] uppercase text-[#555] mb-1">
         {isUser ? "Du" : "Analyse"}
@@ -45,7 +45,7 @@ export function Message({
 
         {/* Streaming cursor */}
         {isStreaming && (
-          <span className="inline-block w-0.5 h-3.5 bg-accent ml-0.5 align-middle animate-pulse" />
+          <span className="inline-block w-0.5 h-3.5 bg-accent ml-0.5 align-middle animate-cursor-blink" />
         )}
 
         {/* Inline chart */}

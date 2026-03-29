@@ -157,6 +157,25 @@ export function ChatWorkspace({ companyId, sessionId, companyName }: ChatWorkspa
             />
           ))}
 
+          {/* Thinking indicator — waiting for first token */}
+          {isLoading && !streaming && (
+            <div className="self-start animate-fade-in-up">
+              <div className="font-mono text-[9px] tracking-[1.5px] uppercase text-[#555] mb-1">
+                Analyse
+              </div>
+              <div className="px-4 py-3 rounded-r-md border-l-2 border-white/[0.08] bg-white/[0.025]">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-[11px] text-[#555]">Analyserer</span>
+                  <span className="flex gap-1">
+                    <span className="thinking-dot" />
+                    <span className="thinking-dot" />
+                    <span className="thinking-dot" />
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Streaming message */}
           {streaming && (
             <Message
