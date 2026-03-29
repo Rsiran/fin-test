@@ -34,7 +34,7 @@ export default function CompanyPage() {
   }
 
   return (
-    <main className="min-h-screen">
+    <main className="h-screen flex flex-col overflow-hidden">
       <div className="border-b border-white/5 px-8 py-4 flex items-center gap-3">
         <Link
           href="/dashboard"
@@ -54,7 +54,9 @@ export default function CompanyPage() {
       </div>
 
       <ReportFilterProvider companyId={companyId}>
-        <DashboardTabs companyId={companyId} />
+        <div className="flex-1 min-h-0 overflow-auto">
+          <DashboardTabs companyId={companyId} companyName={company.name} />
+        </div>
       </ReportFilterProvider>
     </main>
   );
