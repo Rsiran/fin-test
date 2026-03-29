@@ -2,9 +2,9 @@
  * Detect column count and structure in flat-text financial data.
  * Returns a hint string for the LLM, or null if detection fails.
  */
-export function detectColumnHints(markdown: string): string | null {
-  // Skip if the document has pipe tables (structured path handles those)
-  if (markdown.includes("|---|")) return null;
+export function detectColumnHints(markdown: string, usedStructuredPath: boolean): string | null {
+  // Skip when the structured path succeeded — column hints are only for flat text
+  if (usedStructuredPath) return null;
 
   const lines = markdown.split("\n");
 
