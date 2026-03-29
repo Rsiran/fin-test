@@ -18,7 +18,7 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 
-export function DashboardTabs({ companyId }: { companyId: Id<"companies"> }) {
+export function DashboardTabs({ companyId, companyName }: { companyId: Id<"companies">; companyName: string }) {
   const searchParams = useSearchParams();
   const initialTab = (searchParams.get("tab") as TabId) || "oversikt";
   const [activeTab, setActiveTab] = useState<TabId>(
@@ -59,11 +59,16 @@ export function DashboardTabs({ companyId }: { companyId: Id<"companies"> }) {
 
       {activeTab === "oversikt" && <ReportFilterBar />}
       <UploadProvider companyId={companyId}>
-        <div className="p-8 max-w-7xl mx-auto">
-          {activeTab === "oversikt" && <OverviewTab companyId={companyId} />}
-          {activeTab === "dokumenter" && <DocumentsTab companyId={companyId} />}
-          {activeTab === "chat" && <ChatTab companyId={companyId} />}
-        </div>
+        {activeTab === "chat" ? (
+          <div className="px-0">
+            <ChatTab companyId={companyId} companyName={companyName} />
+          </div>
+        ) : (
+          <div className="p-8 max-w-7xl mx-auto">
+            {activeTab === "oversikt" && <OverviewTab companyId={companyId} />}
+            {activeTab === "dokumenter" && <DocumentsTab companyId={companyId} />}
+          </div>
+        )}
       </UploadProvider>
     </div>
   );

@@ -54,7 +54,7 @@ export default function CompanyPage() {
       </div>
 
       <ReportFilterProvider companyId={companyId}>
-        <DashboardTabs companyId={companyId} />
+        <DashboardTabs companyId={companyId} companyName={company.name} />
       </ReportFilterProvider>
     </main>
   );
