@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useId } from "react";
 import {
   BarChart,
   Bar,
@@ -48,6 +48,7 @@ function ChartTooltipContent({
 
 export function InlineChart({ config }: { config: ChartConfig }) {
   const [showTable, setShowTable] = useState(false);
+  const gradientId = useId();
 
   const data = config.labels.map((label, i) => {
     const point: Record<string, string | number> = { name: label };
@@ -150,7 +151,7 @@ export function InlineChart({ config }: { config: ChartConfig }) {
             ) : (
               <LineChart data={data} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
                 <defs>
-                  <linearGradient id="chartAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="rgba(45,212,191,0.2)" />
                     <stop offset="100%" stopColor="rgba(45,212,191,0)" />
                   </linearGradient>
@@ -178,7 +179,7 @@ export function InlineChart({ config }: { config: ChartConfig }) {
                     key={`area-${ds.label}`}
                     type="monotone"
                     dataKey={ds.label}
-                    fill="url(#chartAreaGradient)"
+                    fill={`url(#${gradientId})`}
                     stroke="none"
                   />
                 ))}
