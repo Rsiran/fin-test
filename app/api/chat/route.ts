@@ -74,7 +74,16 @@ function formatMetricsSummary(metrics: FinancialMetric[]): string {
     byPeriod[m.period].push(m);
   }
 
-  const periods = Object.keys(byPeriod).sort();
+  const periods = Object.keys(byPeriod).sort((a, b) => {
+    // Extract year and suffix (e.g., "2025-Q1" → ["2025", "Q1"], "2025-FY" → ["2025", "FY"])
+    const [yearA, suffA = ""] = a.split("-");
+    const [yearB, suffB = ""] = b.split("-");
+    if (yearA !== yearB) return yearA.localeCompare(yearB);
+    // Within same year: Q1 < Q2 < Q3 < Q4 < FY
+    const order = (s: string) =>
+      s === "Q1" ? 1 : s === "Q2" ? 2 : s === "Q3" ? 3 : s === "Q4" ? 4 : s === "FY" ? 5 : 6;
+    return order(suffA) - order(suffB);
+  });
   let summary = "## Ekstraherte nøkkeltall fra opplastede rapporter\n\n";
 
   for (const period of periods) {
