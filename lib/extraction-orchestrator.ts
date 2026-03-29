@@ -8,7 +8,7 @@ import { scoreExtraction, type QualityScore } from "./quality-scorer";
 import { detectColumnHints } from "./column-hints";
 import { convertPdfToMarkdown } from "./pdf-processor";
 
-const QUALITY_THRESHOLD = 60;
+const QUALITY_THRESHOLD = 70;
 const MAX_VOTING_ATTEMPTS = 3;
 
 interface Attempt {
