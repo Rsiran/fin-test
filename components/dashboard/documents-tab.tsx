@@ -13,9 +13,13 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
   const { allDocuments: documents } = useReportFilter();
   const removeDocument = useMutation(api.documents.remove);
   const currentUserId = useQuery(api.users.me);
+  const currentUser = useQuery(api.users.meProfile);
+  const isAdmin = currentUser?.email === "s2419213@bi.no";
   const [showDeleteAll, setShowDeleteAll] = useState(false);
 
-  const myDocuments = documents?.filter((d: { uploadedBy?: string }) => d.uploadedBy === currentUserId);
+  const myDocuments = isAdmin
+    ? documents
+    : documents?.filter((d: { uploadedBy?: string }) => d.uploadedBy === currentUserId);
 
   const handleDeleteAll = async () => {
     if (!myDocuments) return;
@@ -158,7 +162,7 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
                     </span>
                   </td>
                   <td className="py-3 px-4 text-right">
-                    {doc.uploadedBy === currentUserId && (
+                    {(isAdmin || doc.uploadedBy === currentUserId) && (
                       <button
                         onClick={() => removeDocument({ id: doc._id })}
                         className="text-[#666666] hover:text-negative transition-colors duration-150"
