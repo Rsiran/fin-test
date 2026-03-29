@@ -200,6 +200,9 @@ function extractFinancialSections(markdown: string, maxChars = 80000): string {
   // Split into sections on headings
   const sections = markdown.split(/(?=^#{1,4}\s)/m).filter((s) => s.trim().length > 0);
 
+  // If no headings found (single section), return as-is to avoid truncation
+  if (sections.length <= 1 && markdown.length <= maxChars) return markdown;
+
   // Score each section by financial keyword matches
   const scored = sections.map((section, idx) => {
     // Truncate oversized sections — keep heading + first N chars
