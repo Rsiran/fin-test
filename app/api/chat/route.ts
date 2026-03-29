@@ -193,6 +193,27 @@ export async function POST(req: NextRequest) {
     content: message,
   });
 
+  // Auto-generate session title from first message
+  if (conversationHistory.length === 0) {
+    getOpenAI().chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: "Lag en kort tittel (maks 4-5 ord, på norsk) som oppsummerer brukerens spørsmål. Returner KUN tittelen, ingen anførselstegn eller forklaring.",
+        },
+        { role: "user", content: message },
+      ],
+      temperature: 0,
+      max_tokens: 30,
+    }).then((res) => {
+      const title = res.choices[0].message.content?.trim();
+      if (title) {
+        convex.mutation(api.chatSessions.updateTitle, { sessionId, title });
+      }
+    }).catch(() => {});
+  }
+
   const systemPrompt = `Du er en ekspert norsk finansanalytiker. Du har tilgang til to typer data:
 
 1. NØKKELTALL: Strukturerte finansielle nøkkeltall ekstrahert fra rapportene (tall du kan bruke direkte til sammenligninger)
