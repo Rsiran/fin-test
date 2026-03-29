@@ -47,7 +47,7 @@ export function ChatInput({ value, onChange, onSubmit, disabled, suggestions }: 
           placeholder="Still et spørsmål om selskapet..."
           disabled={disabled}
           rows={1}
-          className="flex-1 px-3.5 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-md text-[13px] text-[#ccc] placeholder:text-[#444] resize-none outline-none focus:border-accent/[0.3] transition-colors disabled:opacity-40"
+          className="flex-1 px-3.5 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-md text-[13px] text-[#ccc] placeholder:text-[#444] resize-none outline-none overflow-hidden focus:border-accent/[0.3] transition-colors disabled:opacity-40"
         />
         <button
           onClick={onSubmit}
