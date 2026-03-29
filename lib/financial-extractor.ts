@@ -253,9 +253,11 @@ export function prepareStructuredInput(markdown: string): string {
   const structured = buildStructuredInput(resolved);
 
   if (!structured) {
-    return stripNumericSeparators(extractFinancialSections(markdown));
+    // Fallback: only strip commas, NOT spaces (spaces separate column values in flat text)
+    return stripCommasOnly(extractFinancialSections(markdown));
   }
 
+  // Structured tables: safe to strip both commas and spaces (one number per cell)
   return stripNumericSeparators(structured);
 }
 
@@ -322,18 +324,24 @@ Returner et JSON-objekt:
 Returner KUN gyldig JSON, ingen annen tekst.`;
 
 /**
- * Strip thousand separators (commas and spaces) from numbers in financial text
- * to prevent LLM parsing errors.
- * "1,252,560" → "1252560", "1 338 842" → "1338842", "212 180" → "212180"
- * Preserves commas/spaces in non-numeric contexts (e.g. "Q4 2023", natural language).
+ * Strip comma thousand separators from numbers.
+ * "1,252,560" → "1252560". Preserves commas in non-numeric contexts.
+ * Safe for both structured tables and raw flat text.
  */
-function stripNumericSeparators(text: string): string {
-  // Strip comma-separated groups: 1,252,560 or 670,030
-  text = text.replace(/\b(\d{1,3})(,\d{3})+\b/g, (match) =>
+function stripCommasOnly(text: string): string {
+  return text.replace(/\b(\d{1,3})(,\d{3})+\b/g, (match) =>
     match.replace(/,/g, "")
   );
-  // Strip space-separated digit groups: 1 338 842 or 212 180
-  // Matches a leading group of 1-3 digits followed by one or more space+3-digit groups
+}
+
+/**
+ * Strip BOTH comma and space thousand separators from numbers.
+ * "1,252,560" → "1252560", "1 338 842" → "1338842"
+ * ONLY safe for structured table output where each cell has one number.
+ * DO NOT use on flat text where multiple values are space-separated.
+ */
+function stripNumericSeparators(text: string): string {
+  text = stripCommasOnly(text);
   text = text.replace(/\b(\d{1,3})((?:\s\d{3})+)\b/g, (match, first, rest) =>
     first + rest.replace(/\s/g, "")
   );

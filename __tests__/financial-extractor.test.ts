@@ -100,6 +100,31 @@ describe("prepareStructuredInput", () => {
     expect(result).toContain("212180");
   });
 
+  it("preserves spaces in fallback path (no pipe tables)", () => {
+    // This markdown has NO pipe-delimited tables — triggers fallback
+    const md = `
+## Income statement
+
+(NOK million) 2025 2024 Operating revenues 2015 1916 EBITDA 394 332
+`;
+    const result = prepareStructuredInput(md);
+    // Spaces between separate values must be preserved
+    expect(result).toContain("2015 1916");
+    expect(result).toContain("394 332");
+  });
+
+  it("still strips commas in fallback path", () => {
+    const md = `
+## Income statement
+
+EUR'000 2023 2022 Revenue 108,622 106,424 Cost of sales (59,858) (49,537)
+`;
+    const result = prepareStructuredInput(md);
+    expect(result).toContain("108622");
+    expect(result).toContain("106424");
+    expect(result).not.toContain("108,622");
+  });
+
   it("does not collapse spaces in non-numeric contexts", () => {
     const md = `
 ## Income statement
