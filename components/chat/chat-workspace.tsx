@@ -23,6 +23,7 @@ export function ChatWorkspace({ companyId, sessionId, companyName }: ChatWorkspa
   const [isLoading, setIsLoading] = useState(false);
   const [streamingSources, setStreamingSources] = useState<SourceMeta[]>([]);
   const [streamingChart, setStreamingChart] = useState<ChartConfig | null>(null);
+  const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
   const [activeSourceIndex, setActiveSourceIndex] = useState<number | null>(null);
   const [allSources, setAllSources] = useState<SourceMeta[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -80,6 +81,7 @@ export function ChatWorkspace({ companyId, sessionId, companyName }: ChatWorkspa
 
     const question = input.trim();
     setInput("");
+    setPendingUserMessage(question);
     setIsLoading(true);
     setStreaming("");
     setStreamingSources([]);
@@ -119,6 +121,7 @@ export function ChatWorkspace({ companyId, sessionId, companyName }: ChatWorkspa
       setStreaming("");
       setStreamingSources([]);
       setStreamingChart(null);
+      setPendingUserMessage(null);
       setIsLoading(false);
       setActiveSourceIndex(null);
     }
@@ -156,6 +159,11 @@ export function ChatWorkspace({ companyId, sessionId, companyName }: ChatWorkspa
               onCiteClick={handleCiteClick}
             />
           ))}
+
+          {/* Optimistic user message — shows immediately before server roundtrip */}
+          {pendingUserMessage && (
+            <Message role="user" content={pendingUserMessage} />
+          )}
 
           {/* Thinking indicator — waiting for first token */}
           {isLoading && !streaming && (
