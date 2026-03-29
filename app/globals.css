@@ -42,8 +42,14 @@ input:focus, textarea:focus {
   box-shadow: 0 0 0 2px rgba(45, 212, 191, 0.3);
 }
 
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.08) transparent;
+}
+
 ::-webkit-scrollbar {
   width: 4px;
+  height: 4px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;

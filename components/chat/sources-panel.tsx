@@ -43,7 +43,7 @@ export function SourcesPanel({ source, onClose }: SourcesPanelProps) {
             </div>
 
             {/* Full excerpt */}
-            <div className="text-xs font-mono leading-relaxed text-[#888] border-l-2 border-accent/[0.2] pl-3 whitespace-pre-wrap">
+            <div className="text-xs font-mono leading-relaxed text-[#888] border-l-2 border-accent/[0.2] pl-3 whitespace-pre-wrap break-words overflow-hidden">
               {source.content}
             </div>
           </div>
