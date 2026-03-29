@@ -34,13 +34,21 @@ export function ChatWorkspace({ companyId, sessionId, companyName, sessions, onS
   const [showSessions, setShowSessions] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Clear optimistic message once Convex has the persisted version
+  // Clear optimistic message and streaming once Convex has the persisted versions
   useEffect(() => {
-    if (pendingUserMessage && messages?.length) {
-      const last = messages[messages.length - 1];
-      if (last.role === "user" && last.content === pendingUserMessage) {
-        setPendingUserMessage(null);
-      }
+    if (!messages?.length) return;
+    const last = messages[messages.length - 1];
+
+    // Clear optimistic user message when Convex has it
+    if (pendingUserMessage && last.role === "user" && last.content === pendingUserMessage) {
+      setPendingUserMessage(null);
+    }
+
+    // Clear streaming text when Convex has the assistant response
+    if (streaming && last.role === "assistant") {
+      setStreaming("");
+      setStreamingSources([]);
+      setStreamingChart(null);
     }
   }, [messages, pendingUserMessage]);
 
@@ -108,10 +116,6 @@ export function ChatWorkspace({ companyId, sessionId, companyName, sessions, onS
         }
       }
     } finally {
-      setStreaming("");
-      setStreamingSources([]);
-      setStreamingChart(null);
-      setPendingUserMessage(null);
       setIsLoading(false);
     }
   };
