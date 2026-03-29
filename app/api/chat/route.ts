@@ -20,14 +20,54 @@ interface ChunkResult {
   pageRange?: string;
 }
 
-/**
- * Format financial metrics into a readable summary for the chat context.
- * Groups metrics by period for easy comparison.
- */
+const CHART_TOOL = {
+  type: "function" as const,
+  function: {
+    name: "create_chart",
+    description:
+      "Create an inline chart visualization for financial data. Use when the user asks for trends, comparisons, graphs, or visual representations of financial metrics.",
+    parameters: {
+      type: "object",
+      properties: {
+        type: {
+          type: "string",
+          enum: ["bar", "line"],
+          description: "Chart type. Use 'bar' for comparisons, 'line' for trends over time.",
+        },
+        title: {
+          type: "string",
+          description: "Chart title, e.g. 'Driftsinntekter (mrd NOK)'",
+        },
+        labels: {
+          type: "array",
+          items: { type: "string" },
+          description: "X-axis labels, e.g. ['2020', '2021', '2022']",
+        },
+        datasets: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              label: { type: "string" },
+              values: { type: "array", items: { type: "number" } },
+            },
+            required: ["label", "values"],
+          },
+          description: "One or more data series",
+        },
+        unit: {
+          type: "string",
+          description: "Unit label for values, e.g. 'mrd NOK', '%'",
+        },
+      },
+      required: ["type", "title", "labels", "datasets"],
+    },
+  },
+};
+
 function formatMetricsSummary(metrics: FinancialMetric[]): string {
   if (metrics.length === 0) return "";
 
-  // Group by period
   const byPeriod: Record<string, FinancialMetric[]> = {};
   for (const m of metrics) {
     if (!byPeriod[m.period]) byPeriod[m.period] = [];
@@ -39,7 +79,6 @@ function formatMetricsSummary(metrics: FinancialMetric[]): string {
 
   for (const period of periods) {
     summary += `### ${period}\n`;
-    // Group by category within period
     const byCategory: Record<string, FinancialMetric[]> = {};
     for (const m of byPeriod[period]) {
       if (!byCategory[m.category]) byCategory[m.category] = [];
@@ -48,9 +87,10 @@ function formatMetricsSummary(metrics: FinancialMetric[]): string {
     for (const [category, items] of Object.entries(byCategory)) {
       summary += `**${category}:**\n`;
       for (const item of items) {
-        const formatted = item.unit === "%"
-          ? `${item.value}%`
-          : `${item.value.toLocaleString("nb-NO")} ${item.unit}`;
+        const formatted =
+          item.unit === "%"
+            ? `${item.value}%`
+            : `${item.value.toLocaleString("nb-NO")} ${item.unit}`;
         summary += `- ${item.metricName}: ${formatted}\n`;
       }
     }
@@ -60,23 +100,15 @@ function formatMetricsSummary(metrics: FinancialMetric[]): string {
   return summary;
 }
 
-/**
- * Build a standalone search query from conversation context.
- * Resolves pronouns like "denne", "det", "de" by including
- * key terms from recent messages.
- */
 async function buildSearchQuery(
   message: string,
   conversationHistory: { role: string; content: string }[]
 ): Promise<string> {
-  // If no history, use the message as-is
   if (conversationHistory.length === 0) return message;
 
-  // Take the last 2 exchanges for context
   const recentMessages = conversationHistory.slice(-4);
   const context = recentMessages.map((m) => m.content).join(" ");
 
-  // Use GPT-4o-mini (fast, cheap) to rewrite as a standalone query
   const response = await getOpenAI().chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
@@ -110,29 +142,27 @@ export async function POST(req: NextRequest) {
 
   const { message, companyId, sessionId } = await req.json();
 
-  // 1. Fetch conversation history, metrics, and rewrite query in parallel
   const [existingMessages, allMetrics] = await Promise.all([
     convex.query(api.chatMessages.listBySession, { sessionId }),
     convex.query(api.financialMetrics.getByCompany, { companyId }),
   ]);
 
-  const conversationHistory = existingMessages.map((m: { role: string; content: string }) => ({
-    role: m.role as "user" | "assistant",
-    content: m.content,
-  }));
+  const conversationHistory = existingMessages.map(
+    (m: { role: string; content: string }) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    })
+  );
 
-  // 2. Rewrite the question as a standalone search query using conversation context
   const searchQuery = await buildSearchQuery(message, conversationHistory);
   const questionEmbedding = await generateEmbedding(searchQuery);
 
-  // 3. Vector search for relevant document chunks
   const relevantChunks = await convex.action(api.chunks.search, {
     companyId,
     embedding: questionEmbedding,
     limit: 16,
   });
 
-  // 3. Build context: structured metrics + numbered RAG chunks
   const metricsSummary = formatMetricsSummary(allMetrics);
 
   const MAX_CONTEXT_CHARS = 60000;
@@ -148,21 +178,13 @@ export async function POST(req: NextRequest) {
     .map((chunk, i) => `[Kilde ${i + 1}]\n${chunk.content}`)
     .join("\n\n---\n\n");
 
-  // 4. Save user message
   await convex.mutation(api.chatMessages.create, {
     sessionId,
     role: "user",
     content: message,
   });
 
-  // 6. Stream GPT-4o response with both structured data and RAG sources
-  const stream = await getOpenAI().chat.completions.create({
-    model: "gpt-4o",
-    stream: true,
-    messages: [
-      {
-        role: "system",
-        content: `Du er en ekspert norsk finansanalytiker. Du har tilgang til to typer data:
+  const systemPrompt = `Du er en ekspert norsk finansanalytiker. Du har tilgang til to typer data:
 
 1. NØKKELTALL: Strukturerte finansielle nøkkeltall ekstrahert fra rapportene (tall du kan bruke direkte til sammenligninger)
 2. KILDER: Nummererte utdrag fra rapportteksten (for kvalitativ kontekst og detaljer)
@@ -175,19 +197,11 @@ Regler:
 - Formater tall med norsk format (komma som desimalskilletegn)
 - Beregn endringer, vekstrater og marginer når det er relevant
 - Aldri si "informasjonen er ikke tilgjengelig" hvis tallene finnes — sjekk BÅDE nøkkeltall og kilder
+- Når brukeren ber om en graf, trend, eller visuell fremstilling, bruk create_chart-verktøyet med korrekte data fra nøkkeltallene/kildene. Gi ALLTID en tekstforklaring i tillegg til grafen.
 
 ${metricsSummary}
 Kilder fra rapporter:
-${numberedContext}`,
-      },
-      ...conversationHistory,
-      { role: "user", content: message },
-    ],
-  });
-
-  // 7. Stream response, then save with source metadata
-  const encoder = new TextEncoder();
-  let fullResponse = "";
+${numberedContext}`;
 
   const sourceMeta = selectedChunks.map((c, i) => ({
     index: i + 1,
@@ -196,18 +210,115 @@ ${numberedContext}`,
     pageRange: c.pageRange,
   }));
 
+  const encoder = new TextEncoder();
+  let fullResponse = "";
+  let chartData: {
+    type: "bar" | "line";
+    title: string;
+    labels: string[];
+    datasets: { label: string; values: number[] }[];
+    unit?: string;
+  } | null = null;
+
+  const chatMessages = [
+    { role: "system" as const, content: systemPrompt },
+    ...conversationHistory.map((m: { role: string; content: string }) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    })),
+    { role: "user" as const, content: message },
+  ];
+
   const readableStream = new ReadableStream({
     async start(controller) {
+      // Send sources first
       controller.enqueue(
         encoder.encode(`data: ${JSON.stringify({ sources: sourceMeta })}\n\n`)
       );
 
+      // First call — may produce a tool call or direct content
+      const stream = await getOpenAI().chat.completions.create({
+        model: "gpt-4o",
+        stream: true,
+        messages: chatMessages,
+        tools: [CHART_TOOL],
+      });
+
+      let toolCallId = "";
+      let toolCallArgs = "";
+
       for await (const chunk of stream) {
-        const content = chunk.choices[0]?.delta?.content || "";
-        fullResponse += content;
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`));
+        const delta = chunk.choices[0]?.delta;
+
+        // Accumulate tool call
+        if (delta?.tool_calls?.[0]) {
+          const tc = delta.tool_calls[0];
+          if (tc.id) toolCallId = tc.id;
+          if (tc.function?.arguments) toolCallArgs += tc.function.arguments;
+        }
+
+        // Stream content
+        const content = delta?.content || "";
+        if (content) {
+          fullResponse += content;
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ content })}\n\n`)
+          );
+        }
       }
 
+      // If tool was called, parse chart and get commentary
+      if (toolCallId && toolCallArgs) {
+        try {
+          chartData = JSON.parse(toolCallArgs);
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ chart: chartData })}\n\n`)
+          );
+
+          // Second call: provide tool result so GPT can give commentary
+          const followUp = await getOpenAI().chat.completions.create({
+            model: "gpt-4o",
+            stream: true,
+            messages: [
+              ...chatMessages,
+              {
+                role: "assistant" as const,
+                content: null,
+                tool_calls: [
+                  {
+                    id: toolCallId,
+                    type: "function" as const,
+                    function: {
+                      name: "create_chart",
+                      arguments: toolCallArgs,
+                    },
+                  },
+                ],
+              },
+              {
+                role: "tool" as const,
+                tool_call_id: toolCallId,
+                content: `Grafen "${chartData!.title}" er opprettet og vist til brukeren. Gi nå en kort tekstlig analyse og forklaring av dataene i grafen. Bruk kildehenvisninger.`,
+              },
+            ],
+            tools: [CHART_TOOL],
+          });
+
+          for await (const chunk of followUp) {
+            const content = chunk.choices[0]?.delta?.content || "";
+            if (content) {
+              fullResponse += content;
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ content })}\n\n`)
+              );
+            }
+          }
+        } catch {
+          // If chart parsing fails, continue without chart
+        }
+      }
+
+      // Save assistant message with sources and chart
       await convex.mutation(api.chatMessages.create, {
         sessionId,
         role: "assistant",
@@ -217,6 +328,7 @@ ${numberedContext}`,
           content: c.content.substring(0, 1500),
           pageRange: c.pageRange,
         })),
+        ...(chartData ? { chart: chartData } : {}),
       });
 
       controller.enqueue(encoder.encode("data: [DONE]\n\n"));
