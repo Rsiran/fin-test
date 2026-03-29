@@ -77,11 +77,7 @@ export function ChatWorkspace({ companyId, sessionId, companyName, sessions, onS
     []
   );
 
-  const handleSubmit = async () => {
-    if (!input.trim() || isLoading) return;
-
-    const question = input.trim();
-    setInput("");
+  const sendMessage = async (question: string) => {
     setPendingUserMessage(question);
     setMessageCountAtSubmit(messages?.length ?? 0);
     setIsLoading(true);
@@ -101,8 +97,7 @@ export function ChatWorkspace({ companyId, sessionId, companyName, sessions, onS
 
       if (!response.ok) {
         const err = await response.json().catch(() => null);
-        const msg = err?.error || "Noe gikk galt";
-        setError(msg);
+        setError(err?.error || "Noe gikk galt");
         return;
       }
 
@@ -123,6 +118,7 @@ export function ChatWorkspace({ companyId, sessionId, companyName, sessions, onS
           try {
             const parsed = JSON.parse(data);
             if (parsed.sources) setStreamingSources(parsed.sources);
+            if (parsed.finalSources) setStreamingSources(parsed.finalSources);
             if (parsed.chart) setStreamingChart(parsed.chart);
             if (parsed.suggestions) setSuggestions(parsed.suggestions);
             if (parsed.clarification) setClarification(parsed.clarification);
@@ -135,57 +131,16 @@ export function ChatWorkspace({ companyId, sessionId, companyName, sessions, onS
     }
   };
 
+  const handleSubmit = async () => {
+    if (!input.trim() || isLoading) return;
+    const question = input.trim();
+    setInput("");
+    await sendMessage(question);
+  };
+
   const handleOptionClick = (option: string) => {
     setClarification(null);
-    setInput(option);
-    // Auto-submit after a tick so the input state is set
-    setTimeout(() => {
-      setInput("");
-      setPendingUserMessage(option);
-      setMessageCountAtSubmit(messages?.length ?? 0);
-      setIsLoading(true);
-      setStreaming("");
-      setStreamingSources([]);
-      setStreamingChart(null);
-      setSuggestions([]);
-      setClarification(null);
-      setError(null);
-
-      fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: option, companyId, sessionId }),
-      }).then(async (response) => {
-        if (!response.ok) {
-          const err = await response.json().catch(() => null);
-          setError(err?.error || "Noe gikk galt");
-          return;
-        }
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
-        if (!reader) return;
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          const text = decoder.decode(value);
-          const lines = text.split("\n").filter((l) => l.startsWith("data: "));
-          for (const line of lines) {
-            const data = line.slice(6);
-            if (data === "[DONE]") break;
-            try {
-              const parsed = JSON.parse(data);
-              if (parsed.sources) setStreamingSources(parsed.sources);
-              if (parsed.chart) setStreamingChart(parsed.chart);
-              if (parsed.suggestions) setSuggestions(parsed.suggestions);
-              if (parsed.clarification) setClarification(parsed.clarification);
-              if (parsed.content) setStreaming((prev) => prev + parsed.content);
-            } catch {}
-          }
-        }
-      }).finally(() => {
-        setIsLoading(false);
-      });
-    }, 0);
+    sendMessage(option);
   };
 
   const currentSession = sessions.find((s) => s._id === sessionId);
