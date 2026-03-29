@@ -194,11 +194,14 @@ const FINANCIAL_KEYWORDS = [
 const MAX_SECTION_CHARS = 15_000;
 
 function extractFinancialSections(markdown: string, maxChars = 80000): string {
-  // If already small enough, return as-is
-  if (markdown.length <= maxChars) return markdown;
+  // Very short documents don't need section filtering
+  if (markdown.length <= 10000) return markdown;
 
   // Split into sections on headings
   const sections = markdown.split(/(?=^#{1,4}\s)/m).filter((s) => s.trim().length > 0);
+
+  // If no headings found (single section), return as-is to avoid truncation
+  if (sections.length <= 1 && markdown.length <= maxChars) return markdown;
 
   // Score each section by financial keyword matches
   const scored = sections.map((section, idx) => {
@@ -327,6 +330,69 @@ Returner et JSON-objekt:
 
 Returner KUN gyldig JSON, ingen annen tekst.`;
 
+const FALLBACK_EXTRACTION_PROMPT = `Du er en ekspert på norsk finansanalyse.
+
+Du mottar en USTRUKTURERT finansrapport som ren tekst (ikke tabeller). Finansielle data er spredt i dokumentet som rader med plassseparerte verdier.
+
+OPPGAVE 1 — FINN FINANSOPPSTILLINGENE:
+Let etter seksjoner merket "Income statement", "Resultatregnskap", "Statement of financial position", "Balanse", "Statement of cash flows", "Kontantstrøm" eller lignende overskrifter.
+
+OPPGAVE 2 — FORSTÅ KOLONNENE:
+Dataradene har formatet: Label verdi1 verdi2 verdi3...
+Den FØRSTE verdien er for gjeldende periode (frittstående kvartal). IGNORER alle andre verdier — de er sammenligningsperioder.
+
+OPPGAVE 3 — STANDARDISER METRIKKNAVNENE:
+Bruk KUN disse navnene:
+- resultat: driftsinntekter, driftsresultat, ebitda, resultat_for_skatt, aarsresultat, resultat_per_aksje
+- balanse: sum_eiendeler, egenkapital, total_gjeld, kontanter, egenkapitalandel
+- kontantstrøm: operasjonell_kontantstrom, investeringsaktiviteter, finansieringsaktiviteter, fri_kontantstrom, netto_endring_kontanter
+- nøkkeltall: driftsmargin, ebitda_margin, netto_margin, roe, roa, gjeldsgrad
+
+Kartlegging:
+- Revenue / Total revenue / Operating revenues → "driftsinntekter"
+- Operating profit / EBIT / Operating result → "driftsresultat"
+- Gross operating profit / EBITDA → "ebitda"
+- Profit before tax / Resultat før skatt → "resultat_for_skatt"
+- Profit / Net income / Profit for the period → "aarsresultat"
+- Total assets / Sum eiendeler → "sum_eiendeler"
+- Equity / Total equity → "egenkapital"
+- Total liabilities → "total_gjeld" (beregn som Total assets - Equity hvis ikke oppgitt direkte)
+- Cash / Cash and cash equivalents → "kontanter"
+- Net cash flow from operating activities → "operasjonell_kontantstrom"
+- Net cash flow from investing activities → "investeringsaktiviteter"
+- Net cash flow from financing activities → "finansieringsaktiviteter"
+
+OPPGAVE 4 — NORMALISER VERDIER:
+Se etter enhetsangivelse som "(NOK million)", "(NOK 1000)", "EUR'000" etc.
+- Kommaer i tall er tusenskilletegn: 1,694 = 1694
+- Negative tall kan vises som (tall) eller -tall
+- Behold full presisjon
+
+OPPGAVE 5 — FINN VALUTA:
+Se etter valutaindikatorer (NOK, EUR, USD, SEK, etc.)
+
+Returner et JSON-objekt:
+{
+  "period": "<rapporteringsperiode, f.eks. 'Q2 2025'>",
+  "reportType": "<årsrapport|kvartalsrapport|prospekt|børsmelding|annet>",
+  "periodScope": "<standalone|cumulative>",
+  "periodEvidence": "<EKSAKT tekst som viser perioden>",
+  "currency": "<NOK|EUR|USD|SEK|DKK|GBP>",
+  "originalUnit": "<enhet, f.eks. million, thousands>",
+  "unitEvidence": "<enhetsbeskrivelse>",
+  "metrics": [
+    {
+      "metricName": "<standardisert navn>",
+      "value": <numerisk verdi i millioner>,
+      "unit": "<MNOK|MEUR|MUSD|MSEK|MDKK|MGBP|%|x>",
+      "category": "<resultat|balanse|kontantstrøm|nøkkeltall>",
+      "confidence": "<high|medium|low>"
+    }
+  ]
+}
+
+Returner KUN gyldig JSON, ingen annen tekst.`;
+
 /**
  * Strip comma thousand separators from numbers.
  * "1,252,560" → "1252560". Preserves commas in non-numeric contexts.
@@ -356,12 +422,13 @@ export async function extractFinancialData(markdown: string): Promise<Extraction
   const { getOpenAI } = await import("./openai");
 
   // Extract only financially relevant sections instead of sending entire document
-  const { content: financialContent } = prepareStructuredInput(markdown);
+  const { content: financialContent, usedStructuredPath } = prepareStructuredInput(markdown);
+  const prompt = usedStructuredPath ? EXTRACTION_PROMPT : FALLBACK_EXTRACTION_PROMPT;
 
   const response = await getOpenAI().chat.completions.create({
     model: "gpt-4o",
     messages: [
-      { role: "system", content: EXTRACTION_PROMPT },
+      { role: "system", content: prompt },
       { role: "user", content: financialContent },
     ],
     response_format: { type: "json_object" },
@@ -414,13 +481,14 @@ export async function extractWithFeedback(
 ): Promise<ExtractionResult> {
   const { getOpenAI } = await import("./openai");
 
-  const { content: financialContent } = prepareStructuredInput(markdown);
+  const { content: financialContent, usedStructuredPath } = prepareStructuredInput(markdown);
+  const basePrompt = usedStructuredPath ? EXTRACTION_PROMPT : FALLBACK_EXTRACTION_PROMPT;
   const feedbackNote = `VIKTIG: Forrige ekstraksjonsforsøk manglet disse metrikkene som finnes i inndataen: ${missing.join(", ")}. Sørg for å ekstrahere ALLE tilgjengelige metrikker.`;
 
   const response = await getOpenAI().chat.completions.create({
     model: "gpt-4o",
     messages: [
-      { role: "system", content: feedbackNote + "\n\n" + EXTRACTION_PROMPT },
+      { role: "system", content: feedbackNote + "\n\n" + basePrompt },
       { role: "user", content: financialContent },
     ],
     response_format: { type: "json_object" },

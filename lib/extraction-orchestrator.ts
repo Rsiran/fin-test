@@ -46,7 +46,7 @@ export async function extractWithRetry(
   // Add column hints for fallback path
   let workingMarkdown = markdown;
   if (!usedStructuredPath) {
-    const hints = detectColumnHints(markdown);
+    const hints = detectColumnHints(markdown, usedStructuredPath);
     if (hints) {
       console.log(`[orchestrator] Adding column hints: ${hints.slice(0, 80)}...`);
       workingMarkdown = `[COLUMN STRUCTURE]: ${hints}\n\n${markdown}`;
