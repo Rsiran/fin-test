@@ -240,11 +240,6 @@ ${numberedContext}`;
 
   const readableStream = new ReadableStream({
     async start(controller) {
-      // Send sources first
-      controller.enqueue(
-        encoder.encode(`data: ${JSON.stringify({ sources: sourceMeta })}\n\n`)
-      );
-
       // First call — may produce a tool call or direct content
       const stream = await getOpenAI().chat.completions.create({
         model: "gpt-4o",
@@ -327,15 +322,33 @@ ${numberedContext}`;
         }
       }
 
-      // Save assistant message with sources and chart
+      // Extract which source indices GPT actually cited: [1], [2], [Kilde 3], etc.
+      const citedIndices = new Set<number>();
+      const citePattern = /\[(?:Kilde\s*)?(\d+)\]/g;
+      let match;
+      while ((match = citePattern.exec(fullResponse)) !== null) {
+        citedIndices.add(parseInt(match[1], 10));
+      }
+
+      // Filter to only cited sources
+      const citedSources = sourceMeta.filter((s) => citedIndices.has(s.index));
+
+      // Send cited sources after streaming completes
+      if (citedSources.length > 0) {
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ sources: citedSources })}\n\n`)
+        );
+      }
+
+      // Save assistant message with only cited sources
       await convex.mutation(api.chatMessages.create, {
         sessionId,
         role: "assistant",
         content: fullResponse,
-        sources: selectedChunks.slice(0, 10).map((c) => ({
-          chunkId: c._id as Id<"chunks">,
-          content: c.content.substring(0, 1500),
-          pageRange: c.pageRange,
+        sources: citedSources.map((s) => ({
+          chunkId: s.chunkId as Id<"chunks">,
+          content: s.content,
+          pageRange: s.pageRange,
         })),
         ...(chartData ? { chart: chartData } : {}),
       });
