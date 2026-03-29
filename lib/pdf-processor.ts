@@ -28,6 +28,9 @@ export async function convertPdfToMarkdown(pdfBuffer: Buffer): Promise<string> {
         hybridUrl: process.env.DOCLING_SERVE_URL,
         hybridTimeout: "120000",
         hybridFallback: true,
+        ...(process.env.__HYBRID_MODE_OVERRIDE && {
+          hybridMode: process.env.__HYBRID_MODE_OVERRIDE,
+        }),
       }),
       quiet: true,
     });
