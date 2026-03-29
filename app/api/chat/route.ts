@@ -70,18 +70,18 @@ const CLARIFICATION_TOOL = {
   function: {
     name: "ask_clarification",
     description:
-      "Ask the user a clarifying question before creating a visualization. Use this when the user requests a graph but you need to know their preference for chart type, time period, or which metrics to show. Ask ONE concise question with 2-4 clickable options.",
+      "Ask the user a clarifying question before creating a visualization. Use when the user requests a graph/chart but hasn't specified the format. Ask ONE short question. Options must be short labels (1-2 words max), never full sentences.",
     parameters: {
       type: "object",
       properties: {
         question: {
           type: "string",
-          description: "The question to ask, in Norwegian. Keep it short.",
+          description: "Short question in Norwegian, e.g. 'Hvilken graftype?'",
         },
         options: {
           type: "array",
           items: { type: "string" },
-          description: "2-4 short clickable options in Norwegian",
+          description: "2-4 short labels (1-2 words each). Examples: 'Linjegraf', 'Stolpediagram', 'Tabell'. NEVER use full sentences.",
         },
       },
       required: ["question", "options"],
@@ -251,8 +251,9 @@ Regler:
 - Formater tall med norsk format (komma som desimalskilletegn)
 - Beregn endringer, vekstrater og marginer når det er relevant
 - Aldri si "informasjonen er ikke tilgjengelig" hvis tallene finnes — sjekk BÅDE nøkkeltall og kilder
-- Når brukeren ber om en graf, trend, eller visuell fremstilling: bruk FØRST ask_clarification for å spørre brukeren om preferanser (f.eks. graftype, tidsperiode, eller hvilke metrikker). Still ÉTT kort spørsmål med 2-4 valgalternativer. Når brukeren har svart, bruk create_chart med korrekte data. Gi ALLTID en tekstforklaring i tillegg til grafen.
-- IKKE bruk ask_clarification hvis brukeren allerede har spesifisert hva de vil ha (f.eks. "vis linjegraf over inntekter siste 5 år").
+- Når brukeren ber om en graf/visualisering uten å spesifisere format: bruk ask_clarification med ETT kort spørsmål (f.eks. "Hvilken graftype?") og korte valg (f.eks. "Linjegraf", "Stolpediagram", "Tabell"). Valgene skal være 1-2 ord, ALDRI hele setninger.
+- IKKE bruk ask_clarification hvis brukeren allerede har spesifisert format (f.eks. "vis linjegraf over inntekter").
+- Når du lager en graf med create_chart, gi ALLTID en kort tekstforklaring i tillegg.
 
 ${metricsSummary}
 Kilder fra rapporter:
