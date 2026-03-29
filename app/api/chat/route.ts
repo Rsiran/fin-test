@@ -316,6 +316,12 @@ ${numberedContext}`;
 
   const readableStream = new ReadableStream({
     async start(controller) {
+      // Send all sources upfront so streaming citations can match
+      if (sourceMeta.length > 0) {
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ sources: sourceMeta })}\n\n`)
+        );
+      }
 
       let toolCallId = "";
       let toolCallName = "";
@@ -441,10 +447,10 @@ ${numberedContext}`;
         })
         .filter((s): s is NonNullable<typeof s> => s !== null);
 
-      // Send cited sources after streaming completes
+      // Send renumbered sources so the client can update for the persisted message
       if (citedSources.length > 0) {
         controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ sources: citedSources })}\n\n`)
+          encoder.encode(`data: ${JSON.stringify({ finalSources: citedSources })}\n\n`)
         );
       }
 
