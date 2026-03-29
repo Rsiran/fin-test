@@ -75,6 +75,14 @@ input:focus, textarea:focus {
   animation: slide-in-right 200ms ease-out;
 }
 
+@keyframes slide-in-left {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+.animate-slide-in-left {
+  animation: slide-in-left 200ms ease-out;
+}
+
 /* Chat animations */
 @keyframes cursor-blink {
   0%, 100% { opacity: 1; }

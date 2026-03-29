@@ -7,16 +7,21 @@ import { Id } from "@/convex/_generated/dataModel";
 import { Message } from "./message";
 import { SourcesPanel } from "./sources-panel";
 import { ChatInput } from "./chat-input";
+import { SessionsPanel } from "./sessions-panel";
 import type { SourceMeta } from "./cited-text";
 import type { ChartConfig } from "./inline-chart";
+import { ChatCircle, Plus } from "@phosphor-icons/react";
 
 interface ChatWorkspaceProps {
   companyId: Id<"companies">;
   sessionId: Id<"chatSessions">;
   companyName: string;
+  sessions: { _id: Id<"chatSessions">; title?: string; createdAt: number }[];
+  onSelectSession: (id: Id<"chatSessions">) => void;
+  onNewSession: () => void;
 }
 
-export function ChatWorkspace({ companyId, sessionId, companyName }: ChatWorkspaceProps) {
+export function ChatWorkspace({ companyId, sessionId, companyName, sessions, onSelectSession, onNewSession }: ChatWorkspaceProps) {
   const messages = useQuery(api.chatMessages.listBySession, { sessionId });
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState("");
@@ -26,6 +31,7 @@ export function ChatWorkspace({ companyId, sessionId, companyName }: ChatWorkspa
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
   const [activeSource, setActiveSource] = useState<SourceMeta | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSessions, setShowSessions] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -100,18 +106,68 @@ export function ChatWorkspace({ companyId, sessionId, companyName }: ChatWorkspa
     }
   };
 
+  const currentSession = sessions.find((s) => s._id === sessionId);
+
   return (
-    <div className="flex h-full">
+    <div className="flex h-full relative">
+      {/* Sessions panel overlay */}
+      {showSessions && (
+        <SessionsPanel
+          sessions={sessions}
+          activeSessionId={sessionId}
+          onSelect={(id) => {
+            onSelectSession(id);
+            setShowSessions(false);
+          }}
+          onNew={() => {
+            onNewSession();
+            setShowSessions(false);
+          }}
+          onClose={() => setShowSessions(false)}
+        />
+      )}
+
       {/* Left: Chat pane */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Terminal header */}
-        <div className="px-5 py-3.5 border-b border-white/[0.06] flex items-center gap-2.5">
+        <div className="px-5 py-3.5 border-b border-white/[0.06] flex items-center gap-2.5 flex-shrink-0">
+          {/* Samtaler button */}
+          <button
+            onClick={() => setShowSessions(true)}
+            className="flex items-center gap-1.5 px-2 py-1 rounded text-[#555] hover:text-[#999] hover:bg-white/[0.04] transition-colors"
+          >
+            <ChatCircle size={14} />
+            <span className="text-[10px] font-mono">Samtaler</span>
+          </button>
+
+          <span className="text-white/[0.08] text-[11px]">|</span>
+
           <div className="w-[7px] h-[7px] rounded-full bg-accent" />
           <span className="font-mono text-[11px] tracking-[2px] uppercase text-accent">
             FinansAnalyse
           </span>
           <span className="text-white/[0.15] text-[11px]">/</span>
           <span className="text-[11px] text-[#666] tracking-wide">{companyName}</span>
+
+          {/* Current session name */}
+          {currentSession?.title && currentSession.title !== "Ny samtale" && (
+            <>
+              <span className="text-white/[0.15] text-[11px]">/</span>
+              <span className="text-[11px] text-[#555] truncate max-w-[200px]">
+                {currentSession.title}
+              </span>
+            </>
+          )}
+
+          {/* New chat button on the right */}
+          <div className="flex-1" />
+          <button
+            onClick={onNewSession}
+            className="flex items-center gap-1 px-2 py-1 text-[10px] font-mono text-[#555] hover:text-accent hover:bg-accent/[0.06] rounded transition-colors"
+          >
+            <Plus size={12} weight="bold" />
+            <span>Ny samtale</span>
+          </button>
         </div>
 
         {/* Messages */}
