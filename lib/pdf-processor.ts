@@ -26,6 +26,8 @@ export async function convertPdfToMarkdown(pdfBuffer: Buffer): Promise<string> {
       ...(process.env.DOCLING_SERVE_URL && {
         hybrid: "docling-fast",
         hybridUrl: process.env.DOCLING_SERVE_URL,
+        hybridTimeout: "120000",
+        hybridFallback: true,
       }),
       quiet: true,
     });
