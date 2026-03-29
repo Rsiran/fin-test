@@ -32,6 +32,7 @@ export function ChatWorkspace({ companyId, sessionId, companyName, sessions, onS
   const [activeSource, setActiveSource] = useState<SourceMeta | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSessions, setShowSessions] = useState(false);
+  const [messageCountAtSubmit, setMessageCountAtSubmit] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Clear optimistic message and streaming once Convex has the persisted versions
@@ -44,11 +45,12 @@ export function ChatWorkspace({ companyId, sessionId, companyName, sessions, onS
       setPendingUserMessage(null);
     }
 
-    // Clear streaming text when Convex has the assistant response
-    if (streaming && last.role === "assistant") {
+    // Clear streaming text when a NEW assistant message appears (message count grew past submit point)
+    if (streaming && messageCountAtSubmit !== null && messages.length > messageCountAtSubmit + 1 && last.role === "assistant") {
       setStreaming("");
       setStreamingSources([]);
       setStreamingChart(null);
+      setMessageCountAtSubmit(null);
     }
   }, [messages, pendingUserMessage]);
 
@@ -79,6 +81,7 @@ export function ChatWorkspace({ companyId, sessionId, companyName, sessions, onS
     const question = input.trim();
     setInput("");
     setPendingUserMessage(question);
+    setMessageCountAtSubmit(messages?.length ?? 0);
     setIsLoading(true);
     setStreaming("");
     setStreamingSources([]);
