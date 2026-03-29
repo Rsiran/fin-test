@@ -61,6 +61,7 @@ export const updateStatus = mutation({
     periodScope: v.optional(v.string()),
     periodEvidence: v.optional(v.string()),
     normalizationWarning: v.optional(v.string()),
+    extractionQuality: v.optional(v.number()),
     fileName: v.optional(v.string()),
     clearR2Key: v.optional(v.boolean()),
   },

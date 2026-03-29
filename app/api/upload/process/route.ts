@@ -5,7 +5,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import { convertPdfToMarkdown } from "@/lib/pdf-processor";
 import { chunkMarkdown } from "@/lib/chunker";
 import { generateEmbeddings } from "@/lib/embeddings";
-import { extractFinancialData } from "@/lib/financial-extractor";
+import { extractWithRetry } from "@/lib/extraction-orchestrator";
 import { periodToFileName } from "@/lib/period-format";
 import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
 import { downloadToFile, deleteObject } from "@/lib/r2";
@@ -112,7 +112,7 @@ async function doProcessing(
   // 6. Run extraction and chunking in parallel
   console.log(`Processing ${docId}: extracting metrics and chunking`);
   const [extractionResult, chunks] = await Promise.all([
-    extractFinancialData(markdown),
+    extractWithRetry(markdown, { pdfBuffer }),
     Promise.resolve(chunkMarkdown(markdown)),
   ]);
 
@@ -201,6 +201,7 @@ async function doProcessing(
       periodScope: extractionResult.periodScope,
       periodEvidence: extractionResult.periodEvidence,
       normalizationWarning,
+      extractionQuality: extractionResult.quality?.score,
       ...(standardizedName ? { fileName: standardizedName } : {}),
       clearR2Key: true,
     });
