@@ -25,6 +25,7 @@ export function ChatWorkspace({ companyId, sessionId, companyName }: ChatWorkspa
   const [streamingChart, setStreamingChart] = useState<ChartConfig | null>(null);
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
   const [activeSource, setActiveSource] = useState<SourceMeta | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -58,7 +59,7 @@ export function ChatWorkspace({ companyId, sessionId, companyName }: ChatWorkspa
     setStreaming("");
     setStreamingSources([]);
     setStreamingChart(null);
-    setActiveSourceIndex(null);
+    setSuggestions([]);
 
     try {
       const response = await fetch("/api/chat", {
@@ -85,6 +86,7 @@ export function ChatWorkspace({ companyId, sessionId, companyName }: ChatWorkspa
             const parsed = JSON.parse(data);
             if (parsed.sources) setStreamingSources(parsed.sources);
             if (parsed.chart) setStreamingChart(parsed.chart);
+            if (parsed.suggestions) setSuggestions(parsed.suggestions);
             if (parsed.content) setStreaming((prev) => prev + parsed.content);
           } catch {}
         }
@@ -95,15 +97,8 @@ export function ChatWorkspace({ companyId, sessionId, companyName }: ChatWorkspa
       setStreamingChart(null);
       setPendingUserMessage(null);
       setIsLoading(false);
-      setActiveSourceIndex(null);
     }
   };
-
-  const suggestions = [
-    "Sammenlign med forrige kvartal",
-    "Vis inntektsutvikling som graf",
-    "Analyser gjeldssituasjonen",
-  ];
 
   return (
     <div className="flex h-full">

@@ -340,6 +340,32 @@ ${numberedContext}`;
         );
       }
 
+      // Generate dynamic follow-up suggestions based on conversation
+      try {
+        const suggestionsResponse = await getOpenAI().chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [
+            {
+              role: "system",
+              content: `Basert på samtalen nedenfor, foreslå 3 korte oppfølgingsspørsmål brukeren kan stille om selskapet. Hvert spørsmål skal være maks 6 ord, på norsk, og relevant til konteksten. Returner KUN 3 spørsmål separert med newline, ingen nummerering eller punkttegn.`,
+            },
+            { role: "user", content: message },
+            { role: "assistant", content: fullResponse.substring(0, 500) },
+          ],
+          temperature: 0.7,
+          max_tokens: 100,
+        });
+        const suggestionsText = suggestionsResponse.choices[0].message.content?.trim() || "";
+        const suggestions = suggestionsText.split("\n").filter((s) => s.trim()).slice(0, 3);
+        if (suggestions.length > 0) {
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ suggestions })}\n\n`)
+          );
+        }
+      } catch {
+        // Suggestions are non-critical, skip on failure
+      }
+
       // Save assistant message with only cited sources
       await convex.mutation(api.chatMessages.create, {
         sessionId,
