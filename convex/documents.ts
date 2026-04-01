@@ -85,6 +85,61 @@ export const updateStatus = mutation({
   },
 });
 
+export const resetForReprocessing = mutation({
+  args: { id: v.id("documents") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Ikke autentisert");
+    const doc = await ctx.db.get(args.id);
+    if (!doc) throw new Error("Dokument ikke funnet");
+
+    // Admin or owner check
+    const identity = await ctx.auth.getUserIdentity();
+    const adminEmails = ["s2419213@bi.no"];
+    const isAdmin = identity?.email && adminEmails.includes(identity.email);
+    if (!isAdmin && doc.uploadedBy && doc.uploadedBy !== userId) {
+      throw new Error("Ingen tilgang");
+    }
+
+    if (!doc.r2Key) throw new Error("PDF ikke tilgjengelig for re-prosessering");
+
+    // Delete existing chunks
+    const chunks = await ctx.db
+      .query("chunks")
+      .withIndex("by_document", (q) => q.eq("documentId", args.id))
+      .collect();
+    for (const chunk of chunks) {
+      await ctx.db.delete(chunk._id);
+    }
+
+    // Delete existing metrics
+    const metrics = await ctx.db
+      .query("financialMetrics")
+      .withIndex("by_company", (q) => q.eq("companyId", doc.companyId))
+      .filter((q) => q.eq(q.field("documentId"), args.id))
+      .collect();
+    for (const metric of metrics) {
+      await ctx.db.delete(metric._id);
+    }
+
+    // Delete old markdown file
+    if (doc.markdownFileId) {
+      await ctx.storage.delete(doc.markdownFileId);
+    }
+
+    // Reset status
+    await ctx.db.patch(args.id, {
+      status: "processing",
+      markdownFileId: undefined,
+      extractionQuality: undefined,
+      normalizationWarning: undefined,
+      errorMessage: undefined,
+    });
+
+    return { r2Key: doc.r2Key, companyId: doc.companyId };
+  },
+});
+
 export const remove = mutation({
   args: { id: v.id("documents") },
   handler: async (ctx, args) => {

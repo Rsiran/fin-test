@@ -228,7 +228,10 @@ export async function POST(req: NextRequest) {
     const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
     convex.setAuth(token);
 
-    const { docId } = (await req.json()) as { docId: string };
+    const { docId, reprocess } = (await req.json()) as {
+      docId: string;
+      reprocess?: boolean;
+    };
     if (!docId) {
       return NextResponse.json(
         { error: "docId is required" },
@@ -238,6 +241,21 @@ export async function POST(req: NextRequest) {
 
     const typedDocId = docId as Id<"documents">;
 
+    if (reprocess) {
+      // Re-process: reset document and re-run pipeline
+      const { r2Key, companyId } = await convex.mutation(
+        api.documents.resetForReprocessing,
+        { id: typedDocId }
+      );
+
+      enqueueProcessing(() =>
+        processInBackground(convex, typedDocId, companyId, r2Key)
+      );
+
+      return NextResponse.json({ docId, status: "reprocessing" });
+    }
+
+    // Original upload flow
     const doc = await convex.query(api.documents.get, { id: typedDocId });
     if (!doc) {
       return NextResponse.json(
@@ -252,16 +270,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Set status to "processing"
     await convex.mutation(api.documents.updateStatus, {
       id: typedDocId,
       status: "processing",
     });
 
-    // Capture r2Key after the guard — guaranteed to be defined here
     const r2Key = doc.r2Key;
 
-    // Enqueue for sequential processing — only one Java process at a time
     enqueueProcessing(() =>
       processInBackground(convex, typedDocId, doc.companyId, r2Key)
     );
