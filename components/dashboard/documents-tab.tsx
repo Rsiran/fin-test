@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { UploadDropzone } from "../upload-dropzone";
-import { DownloadSimple, Trash, Warning } from "@phosphor-icons/react";
+import { DownloadSimple, Trash, Warning, ArrowsClockwise } from "@phosphor-icons/react";
 import { useState, useCallback } from "react";
 import { useReportFilter } from "./report-filter-context";
 import JSZip from "jszip";
@@ -19,6 +19,26 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
   const [showDeleteAll, setShowDeleteAll] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isDownloading, setIsDownloading] = useState(false);
+  const [reprocessingIds, setReprocessingIds] = useState<Set<string>>(new Set());
+
+  const handleReprocess = async (docId: Id<"documents">) => {
+    setReprocessingIds((prev) => new Set(prev).add(docId));
+    try {
+      await fetch("/api/upload/process", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ docId, reprocess: true }),
+      });
+    } finally {
+      setTimeout(() => {
+        setReprocessingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(docId);
+          return next;
+        });
+      }, 2000);
+    }
+  };
 
   const myDocuments = isAdmin
     ? documents
@@ -207,7 +227,7 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
               </tr>
             </thead>
             <tbody>
-              {documents.map((doc: { _id: Id<"documents">; fileName: string; reportType: string; period: string; status: string; uploadedBy?: string; markdownUrl?: string | null }) => (
+              {documents.map((doc: { _id: Id<"documents">; fileName: string; reportType: string; period: string; status: string; uploadedBy?: string; markdownUrl?: string | null; r2Key?: string }) => (
                 <tr
                   key={doc._id}
                   className="border-b border-white/5 last:border-0 hover:bg-white/[0.03] transition-colors duration-150"
@@ -284,14 +304,29 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
                     </span>
                   </td>
                   <td className="py-3 px-4 text-right">
-                    {(isAdmin || doc.uploadedBy === currentUserId) && (
-                      <button
-                        onClick={() => removeDocument({ id: doc._id })}
-                        className="text-[#666666] hover:text-negative transition-colors duration-150"
-                      >
-                        <Trash size={16} />
-                      </button>
-                    )}
+                    <div className="flex items-center justify-end gap-2">
+                      {(isAdmin || doc.uploadedBy === currentUserId) && doc.r2Key && (
+                        <button
+                          onClick={() => handleReprocess(doc._id)}
+                          disabled={reprocessingIds.has(doc._id) || doc.status === "processing"}
+                          className="text-[#666666] hover:text-accent transition-colors duration-150 disabled:opacity-30"
+                          title="Re-prosesser"
+                        >
+                          <ArrowsClockwise
+                            size={16}
+                            className={reprocessingIds.has(doc._id) ? "animate-spin" : ""}
+                          />
+                        </button>
+                      )}
+                      {(isAdmin || doc.uploadedBy === currentUserId) && (
+                        <button
+                          onClick={() => removeDocument({ id: doc._id })}
+                          className="text-[#666666] hover:text-negative transition-colors duration-150"
+                        >
+                          <Trash size={16} />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
