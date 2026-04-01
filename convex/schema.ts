@@ -129,6 +129,9 @@ export default defineSchema({
     userEmail: v.string(),
     userAgent: v.string(),
     screenshotId: v.optional(v.id("_storage")),
+    status: v.optional(v.string()),
+    priority: v.optional(v.string()),
+    resolvedAt: v.optional(v.number()),
     createdAt: v.number(),
   }).index("by_category", ["category"]),
 });

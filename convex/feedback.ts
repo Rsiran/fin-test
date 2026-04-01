@@ -17,6 +17,23 @@ export const generateScreenshotUploadUrl = mutation({
   },
 });
 
+export const updateStatus = mutation({
+  args: {
+    id: v.id("feedback"),
+    status: v.string(),
+    priority: v.optional(v.string()),
+    resolvedAt: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const { id, ...fields } = args;
+    const patch: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(fields)) {
+      if (value !== undefined) patch[key] = value;
+    }
+    await ctx.db.patch(id, patch);
+  },
+});
+
 export const submit = mutation({
   args: {
     category: v.union(
