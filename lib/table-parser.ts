@@ -6,6 +6,7 @@ export interface ParsedTable {
   lineNumber: number;
   unitIndicator: string | null;
   detectedUnit: "thousands" | "millions" | "billions" | "whole" | null;
+  detectedCurrency: string | null;
 }
 
 const THOUSANDS_PATTERNS = [
@@ -34,6 +35,27 @@ const BILLIONS_PATTERNS = [
   /\bBNOK\b/i, /\bBEUR\b/i, /\bBUSD\b/i,
   /\(NOKbn\)/i, /\bbillions\b/i,
 ];
+
+const CURRENCY_PATTERNS: [RegExp, string][] = [
+  [/\bNOK\b/i, "NOK"], [/\bMNOK\b/i, "NOK"], [/\bTNOK\b/i, "NOK"], [/\bBNOK\b/i, "NOK"],
+  [/\(NOKm?\)/i, "NOK"], [/\(NOKbn\)/i, "NOK"], [/\bmill\.\s*(?:kr|NOK)/i, "NOK"],
+  [/\bmKR\b/i, "NOK"], [/\bTkr\b/i, "NOK"], [/\bMkr\b/i, "NOK"],
+  [/NOK\s*1\s*000/i, "NOK"], [/\bkroner\b/i, "NOK"],
+  [/\bEUR\b/i, "EUR"], [/\bMEUR\b/i, "EUR"], [/\bTEUR\b/i, "EUR"], [/\bBEUR\b/i, "EUR"],
+  [/\(EURm?\)/i, "EUR"], [/\bmill\.\s*EUR/i, "EUR"], [/[TM]€/, "EUR"],
+  [/\bUSD\b/i, "USD"], [/\bMUSD\b/i, "USD"], [/\bTUSD\b/i, "USD"], [/\bBUSD\b/i, "USD"],
+  [/\(USDm?\)/i, "USD"], [/\bmill\.\s*USD/i, "USD"], [/[TM]\$/, "USD"],
+  [/\bSEK\b/i, "SEK"], [/\bMSEK\b/i, "SEK"], [/\bTSEK\b/i, "SEK"], [/\bBSEK\b/i, "SEK"],
+  [/\bDKK\b/i, "DKK"], [/\bMDKK\b/i, "DKK"], [/\bTDKK\b/i, "DKK"],
+  [/\bGBP\b/i, "GBP"], [/\bMGBP\b/i, "GBP"], [/\bTGBP\b/i, "GBP"],
+];
+
+function detectCurrency(text: string): string | null {
+  for (const [pat, currency] of CURRENCY_PATTERNS) {
+    if (pat.test(text)) return currency;
+  }
+  return null;
+}
 
 function detectUnit(text: string): { indicator: string | null; unit: ParsedTable["detectedUnit"] } {
   for (const pat of THOUSANDS_PATTERNS) {
@@ -125,10 +147,16 @@ export function parseMarkdownTables(markdown: string): ParsedTable[] {
       const heading = findHeading(lines, tableStartLine);
       const headerText = headerCells.join(" ") + " " + heading;
       let { indicator, unit } = detectUnit(headerText);
+      let currency = detectCurrency(headerText);
 
       if (!indicator) {
         const allLabels = rows.map((r) => r.label).join(" ");
         ({ indicator, unit } = detectUnit(allLabels));
+      }
+
+      if (!currency) {
+        const allLabels = rows.map((r) => r.label).join(" ");
+        currency = detectCurrency(allLabels);
       }
 
       tables.push({
@@ -139,6 +167,7 @@ export function parseMarkdownTables(markdown: string): ParsedTable[] {
         lineNumber: tableStartLine + 1,
         unitIndicator: indicator,
         detectedUnit: unit,
+        detectedCurrency: currency,
       });
     } else {
       i++;
