@@ -23,4 +23,47 @@ describe("deduplicateMarkdown", () => {
       expect(result).toContain("content on page 2");
     });
   });
+
+  describe("deduplication", () => {
+    it("removes duplicate pages with >80% line overlap", () => {
+      const sharedLines = Array.from(
+        { length: 10 },
+        (_, i) => `| Row ${i} | ${i * 100} | ${i * 90} |`
+      ).join("\n");
+
+      const input = [
+        "---",
+        "<!-- PAGE 1 -->",
+        "# Resultatregnskap\n",
+        sharedLines,
+        "\n---",
+        "<!-- PAGE 2 -->",
+        "# Resultatregnskap\n",
+        sharedLines,
+        "\n| Extra row | 999 | 888 |",
+      ].join("\n");
+
+      const result = deduplicateMarkdown(input);
+      expect(result).toContain("Extra row");
+      const matches = result.match(/Row 0/g);
+      expect(matches).toHaveLength(1);
+    });
+
+    it("does not deduplicate pages with <80% overlap", () => {
+      const input = [
+        "---",
+        "<!-- PAGE 1 -->",
+        "# Resultatregnskap\n",
+        "| Revenue | 1000 |",
+        "\n---",
+        "<!-- PAGE 2 -->",
+        "# Balanse\n",
+        "| Total assets | 5000 |",
+      ].join("\n");
+
+      const result = deduplicateMarkdown(input);
+      expect(result).toContain("Revenue");
+      expect(result).toContain("Total assets");
+    });
+  });
 });

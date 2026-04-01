@@ -26,6 +26,46 @@ function splitByPages(markdown: string): Page[] {
   return pages;
 }
 
+function normalizeLines(content: string): string[] {
+  return content
+    .split("\n")
+    .map((line) => line.toLowerCase().replace(/\s+/g, " ").trim())
+    .filter((line) => line.length > 0);
+}
+
+function overlapRatio(a: string[], b: string[]): number {
+  if (a.length === 0 && b.length === 0) return 1;
+  if (a.length === 0 || b.length === 0) return 0;
+  const setB = new Set(b);
+  const shared = a.filter((line) => setB.has(line)).length;
+  return shared / Math.min(a.length, b.length);
+}
+
+function deduplicatePages(pages: Page[]): Page[] {
+  const dominated = new Set<number>();
+
+  for (let i = 0; i < pages.length; i++) {
+    if (dominated.has(i)) continue;
+    const linesI = normalizeLines(pages[i].content);
+
+    for (let j = i + 1; j < pages.length; j++) {
+      if (dominated.has(j)) continue;
+      const linesJ = normalizeLines(pages[j].content);
+
+      if (overlapRatio(linesI, linesJ) > 0.8) {
+        if (linesI.length >= linesJ.length) {
+          dominated.add(j);
+        } else {
+          dominated.add(i);
+          break;
+        }
+      }
+    }
+  }
+
+  return pages.filter((_, idx) => !dominated.has(idx));
+}
+
 function reassemble(pages: Page[]): string {
   return pages
     .map((p) =>
@@ -41,6 +81,7 @@ export function deduplicateMarkdown(markdown: string): string {
     return markdown;
   }
 
-  const pages = splitByPages(markdown);
+  let pages = splitByPages(markdown);
+  pages = deduplicatePages(pages);
   return reassemble(pages);
 }
