@@ -64,20 +64,18 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
         (doc: { _id: string; markdownUrl?: string | null }) =>
           selectedIds.has(doc._id) && doc.markdownUrl
       );
-      const parts: string[] = [];
       for (const doc of selected) {
         const res = await fetch(doc.markdownUrl!);
-        const text = await res.text();
-        parts.push(`<!-- ${doc.fileName} -->\n\n${text}`);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = doc.fileName.replace(/\.pdf$/i, ".md");
+        a.click();
+        URL.revokeObjectURL(url);
+        // Small delay so the browser doesn't block sequential downloads
+        await new Promise((r) => setTimeout(r, 300));
       }
-      const combined = parts.join("\n\n---\n\n");
-      const blob = new Blob([combined], { type: "text/markdown" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `dokumenter-${selectedIds.size}-filer.md`;
-      a.click();
-      URL.revokeObjectURL(url);
     } finally {
       setIsDownloading(false);
     }
