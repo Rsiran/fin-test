@@ -5,7 +5,7 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { UploadDropzone } from "../upload-dropzone";
 import { DownloadSimple, Trash, Warning } from "@phosphor-icons/react";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useReportFilter } from "./report-filter-context";
 
 export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
@@ -16,6 +16,8 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
   const currentUser = useQuery(api.users.meProfile);
   const isAdmin = currentUser?.email === "s2419213@bi.no";
   const [showDeleteAll, setShowDeleteAll] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const myDocuments = isAdmin
     ? documents
@@ -29,18 +31,84 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
     setShowDeleteAll(false);
   };
 
+  const downloadableDocs = documents?.filter(
+    (doc: { markdownUrl?: string | null }) => doc.markdownUrl
+  );
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    if (!downloadableDocs) return;
+    const allSelected = downloadableDocs.every((d: { _id: string }) =>
+      selectedIds.has(d._id)
+    );
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(downloadableDocs.map((d: { _id: string }) => d._id)));
+    }
+  }, [downloadableDocs, selectedIds]);
+
+  const handleBulkDownload = async () => {
+    if (!documents || selectedIds.size === 0) return;
+    setIsDownloading(true);
+    try {
+      const selected = documents.filter(
+        (doc: { _id: string; markdownUrl?: string | null }) =>
+          selectedIds.has(doc._id) && doc.markdownUrl
+      );
+      const parts: string[] = [];
+      for (const doc of selected) {
+        const res = await fetch(doc.markdownUrl!);
+        const text = await res.text();
+        parts.push(`<!-- ${doc.fileName} -->\n\n${text}`);
+      }
+      const combined = parts.join("\n\n---\n\n");
+      const blob = new Blob([combined], { type: "text/markdown" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `dokumenter-${selectedIds.size}-filer.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Dokumenter</h2>
-        {myDocuments && myDocuments.length > 0 && (
-          <button
-            onClick={() => setShowDeleteAll(true)}
-            className="text-xs text-[#666666] hover:text-negative transition-colors duration-150"
-          >
-            Slett mine dokumenter
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          {selectedIds.size > 0 && (
+            <button
+              onClick={handleBulkDownload}
+              disabled={isDownloading}
+              className="flex items-center gap-1.5 text-xs text-accent hover:brightness-110 transition-all duration-150 disabled:opacity-50"
+            >
+              <DownloadSimple size={14} />
+              {isDownloading
+                ? "Laster ned..."
+                : `Last ned markdown (${selectedIds.size})`}
+            </button>
+          )}
+          {myDocuments && myDocuments.length > 0 && (
+            <button
+              onClick={() => setShowDeleteAll(true)}
+              className="text-xs text-[#666666] hover:text-negative transition-colors duration-150"
+            >
+              Slett mine dokumenter
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Confirm delete all dialog */}
@@ -91,6 +159,20 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/5">
+                <th className="py-3 px-4 w-10">
+                  <input
+                    type="checkbox"
+                    checked={
+                      !!downloadableDocs?.length &&
+                      downloadableDocs.every((d: { _id: string }) =>
+                        selectedIds.has(d._id)
+                      )
+                    }
+                    onChange={toggleSelectAll}
+                    className="accent-[var(--color-accent)] cursor-pointer"
+                    title="Velg alle"
+                  />
+                </th>
                 <th className="text-left py-3 px-4 text-[9px] uppercase tracking-[1px] text-[#666666] font-sans">
                   Filnavn
                 </th>
@@ -112,6 +194,16 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
                   key={doc._id}
                   className="border-b border-white/5 last:border-0 hover:bg-white/[0.03] transition-colors duration-150"
                 >
+                  <td className="py-3 px-4 w-10">
+                    {doc.markdownUrl && (
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(doc._id)}
+                        onChange={() => toggleSelect(doc._id)}
+                        className="accent-[var(--color-accent)] cursor-pointer"
+                      />
+                    )}
+                  </td>
                   <td className="py-3 px-4 font-sans text-sm">{doc.fileName}</td>
                   <td className="py-3 px-4">
                     <span className="text-xs px-2 py-0.5 rounded-full bg-accent-subtle text-accent font-mono">
