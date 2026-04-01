@@ -89,11 +89,17 @@ export function checkCompleteness(
 ): void {
   const expectedIfPresent: { metric: string; tableSignal: string }[] = [
     { metric: "driftsinntekter", tableSignal: "revenue" },
+    { metric: "varekostnad", tableSignal: "cost of goods" },
+    { metric: "personalkostnader", tableSignal: "employee benefit" },
+    { metric: "avskrivninger", tableSignal: "depreciation" },
     { metric: "driftsresultat", tableSignal: "operating result" },
     { metric: "ebitda", tableSignal: "ebitda" },
+    { metric: "finanskostnader", tableSignal: "finance cost" },
     { metric: "aarsresultat", tableSignal: "profit" },
     { metric: "sum_eiendeler", tableSignal: "total assets" },
     { metric: "egenkapital", tableSignal: "total equity" },
+    { metric: "total_gjeld", tableSignal: "total liabilities" },
+    { metric: "operasjonell_kontantstrom", tableSignal: "operating activities" },
   ];
 
   const inputLower = structuredInput.toLowerCase();
