@@ -8,7 +8,8 @@ import { generateEmbeddings } from "@/lib/embeddings";
 import { extractWithRetry } from "@/lib/extraction-orchestrator";
 import { periodToFileName } from "@/lib/period-format";
 import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
-import { downloadToFile, deleteObject } from "@/lib/r2";
+import { downloadToFile } from "@/lib/r2";
+import { deduplicateMarkdown } from "@/lib/markdown-dedup";
 import { mkdtemp, readFile, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -96,7 +97,11 @@ async function doProcessing(
 
   // 4. Convert PDF to Markdown
   console.log(`Processing ${docId}: converting PDF to markdown`);
-  const markdown = await convertPdfToMarkdown(pdfBuffer);
+  const rawMarkdown = await convertPdfToMarkdown(pdfBuffer);
+
+  // 4b. Deduplicate and deinterleave
+  console.log(`Processing ${docId}: deduplicating markdown`);
+  const markdown = deduplicateMarkdown(rawMarkdown);
 
   // 5. Store markdown in Convex file storage
   const mdUploadUrl = await convex.mutation(
@@ -187,10 +192,7 @@ async function doProcessing(
     });
   }
 
-  // 11. Delete PDF from R2 (best-effort)
-  await deleteObject(r2Key);
-
-  // 12. Update document status to ready, clear r2Key
+  // 11. Update document status to ready
   // Guard: if timeout already set status to "error", don't overwrite
   const currentDoc = await convex.query(api.documents.get, { id: docId });
   if (currentDoc && currentDoc.status !== "error") {
@@ -209,7 +211,6 @@ async function doProcessing(
       normalizationWarning,
       extractionQuality: extractionResult.quality?.score,
       ...(standardizedName ? { fileName: standardizedName } : {}),
-      clearR2Key: true,
     });
     console.log(`Processing ${docId}: complete`);
   } else {
