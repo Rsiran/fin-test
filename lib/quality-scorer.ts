@@ -10,6 +10,7 @@ export interface QualityScore {
 
 const CORE_METRICS = [
   "driftsinntekter",
+  "varekostnad",
   "driftsresultat",
   "ebitda",
   "aarsresultat",
@@ -21,6 +22,7 @@ const CORE_METRICS = [
 
 const METRIC_SIGNALS: { metric: string; signal: string }[] = [
   { metric: "driftsinntekter", signal: "revenue" },
+  { metric: "varekostnad", signal: "cost of goods" },
   { metric: "driftsresultat", signal: "operating result" },
   { metric: "ebitda", signal: "ebitda" },
   { metric: "aarsresultat", signal: "profit" },
