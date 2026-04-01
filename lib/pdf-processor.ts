@@ -23,6 +23,7 @@ export async function convertPdfToMarkdown(pdfBuffer: Buffer): Promise<string> {
       format: "markdown",
       imageOutput: "off",
       contentSafetyOff: "hidden-text",
+      markdownPageSeparator: "---\n<!-- PAGE %page-number% -->\n",
       ...(process.env.DOCLING_SERVE_URL && {
         hybrid: "docling-fast",
         hybridUrl: process.env.DOCLING_SERVE_URL,
