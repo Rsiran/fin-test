@@ -17,6 +17,7 @@
     "@opendataloader/pdf": "^2.0.2",
     "@phosphor-icons/react": "^2.1.10",
     "convex": "^1.33.1",
+    "jszip": "^3.10.1",
     "next": "15.5.13",
     "openai": "^6.32.0",
     "react": "19.1.0",

@@ -7,6 +7,7 @@ import { UploadDropzone } from "../upload-dropzone";
 import { DownloadSimple, Trash, Warning } from "@phosphor-icons/react";
 import { useState, useCallback } from "react";
 import { useReportFilter } from "./report-filter-context";
+import JSZip from "jszip";
 
 export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
   const company = useQuery(api.companies.get, { id: companyId });
@@ -64,18 +65,19 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
         (doc: { _id: string; markdownUrl?: string | null }) =>
           selectedIds.has(doc._id) && doc.markdownUrl
       );
+      const zip = new JSZip();
       for (const doc of selected) {
         const res = await fetch(doc.markdownUrl!);
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = doc.fileName.replace(/\.pdf$/i, ".md");
-        a.click();
-        URL.revokeObjectURL(url);
-        // Small delay so the browser doesn't block sequential downloads
-        await new Promise((r) => setTimeout(r, 300));
+        const text = await res.text();
+        zip.file(doc.fileName.replace(/\.pdf$/i, ".md"), text);
       }
+      const blob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `dokumenter-${selected.length}-filer.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
     } finally {
       setIsDownloading(false);
     }
