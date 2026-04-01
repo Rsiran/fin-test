@@ -133,37 +133,42 @@ async function doProcessing(
     });
   }
 
-  // 9. Cross-period magnitude check
+  // 9. Cross-period magnitude check (revenue + total assets + equity)
   let normalizationWarning: string | undefined;
-  const newRevenue = extractionResult.metrics.find(
-    (m) => m.metricName === "driftsinntekter"
-  );
-  if (newRevenue) {
+  const magnitudeMetrics = ["driftsinntekter", "sum_eiendeler", "egenkapital"];
+  const magnitudeWarnings: string[] = [];
+
+  for (const metricName of magnitudeMetrics) {
+    const newMetric = extractionResult.metrics.find((m) => m.metricName === metricName);
+    if (!newMetric) continue;
     try {
-      const existingRevenue = await convex.query(
+      const existing = await convex.query(
         api.financialMetrics.getByCompanyAndMetric,
-        { companyId, metricName: "driftsinntekter" }
+        { companyId, metricName }
       );
-      if (existingRevenue.length > 0) {
-        const latest = existingRevenue.sort((a, b) =>
-          b.period.localeCompare(a.period)
-        )[0];
+      if (existing.length > 0) {
+        const latest = existing.sort((a, b) => b.period.localeCompare(a.period))[0];
         if (latest.value !== 0) {
-          const ratio = newRevenue.value / latest.value;
+          const ratio = newMetric.value / latest.value;
           if (ratio > 10 || ratio < 0.1) {
-            normalizationWarning =
-              `Mulig enhetsfeil: ${extractionResult.period} driftsinntekter ` +
-              `(${newRevenue.value} ${newRevenue.unit}) er ${ratio.toFixed(1)}x ` +
-              `av ${latest.period} (${latest.value} ${latest.unit}). ` +
-              `Detektert originalUnit: "${extractionResult.originalUnit ?? "ukjent"}". ` +
-              `Bevis: "${extractionResult.unitEvidence ?? "ingen"}"`;
-            console.warn("MAGNITUDE CHECK FAILED:", normalizationWarning);
+            const msg =
+              `${metricName}: ${extractionResult.period} (${newMetric.value} ${newMetric.unit}) ` +
+              `er ${ratio.toFixed(1)}x av ${latest.period} (${latest.value} ${latest.unit})`;
+            magnitudeWarnings.push(msg);
+            console.warn(`MAGNITUDE CHECK FAILED: ${msg}`);
           }
         }
       }
     } catch (e) {
-      console.warn("Magnitude check error:", e);
+      console.warn(`Magnitude check error for ${metricName}:`, e);
     }
+  }
+
+  if (magnitudeWarnings.length > 0) {
+    normalizationWarning =
+      `Mulig enhetsfeil. Detektert originalUnit: "${extractionResult.originalUnit ?? "ukjent"}". ` +
+      `Bevis: "${extractionResult.unitEvidence ?? "ingen"}". ` +
+      magnitudeWarnings.join("; ");
   }
 
   // 10. Store financial metrics
@@ -177,6 +182,7 @@ async function doProcessing(
         metricName: m.metricName,
         value: m.value,
         unit: m.unit,
+        sourceLabel: m.sourceLabel,
       })),
     });
   }

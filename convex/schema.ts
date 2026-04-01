@@ -67,6 +67,7 @@ export default defineSchema({
     metricName: v.string(),
     value: v.number(),
     unit: v.string(),
+    sourceLabel: v.optional(v.string()),
     createdAt: v.number(),
   })
     .index("by_document", ["documentId"])

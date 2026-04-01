@@ -12,6 +12,7 @@ export const insertBatch = mutation({
       metricName: v.string(),
       value: v.number(),
       unit: v.string(),
+      sourceLabel: v.optional(v.string()),
     })),
   },
   handler: async (ctx, args) => {
