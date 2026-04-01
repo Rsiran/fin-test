@@ -6,6 +6,7 @@ import { buildStructuredInput } from "./structured-input";
 
 export interface ExtractedMetric {
   metricName: string;
+  sourceLabel?: string;
   value: number;
   unit: string;
   category: string;
@@ -30,7 +31,8 @@ export interface ValidationResult {
 }
 
 const NON_NEGATIVE_METRICS = [
-  "driftsinntekter", "sum_eiendeler", "egenkapital",
+  "driftsinntekter", "sum_eiendeler", "kontanter", "goodwill",
+  "varige_driftsmidler", "immaterielle_eiendeler", "varer", "kundefordringer",
 ];
 
 /**
@@ -135,21 +137,56 @@ export function checkMagnitude(
 }
 
 export function validateMetrics(metrics: ExtractedMetric[]): ValidationResult {
-  // First fix any magnitude errors using accounting identities
   const fixed = fixBalanceSheetMagnitude(metrics);
 
   const valid: ExtractedMetric[] = [];
   const rejected: { metric: ExtractedMetric; reason: string }[] = [];
 
+  // Build lookup for cross-metric checks
+  const byName = new Map<string, ExtractedMetric>();
+  for (const m of fixed) byName.set(m.metricName, m);
+
   for (const metric of fixed) {
-    if (metric.unit === "%" && Math.abs(metric.value) > 100) {
-      rejected.push({ metric, reason: `${metric.metricName}: value ${metric.value}% exceeds ±100%` });
+    // Percentage range: reject if |value| > 200
+    if (metric.unit === "%" && Math.abs(metric.value) > 200) {
+      rejected.push({ metric, reason: `${metric.metricName}: value ${metric.value}% exceeds ±200%` });
       continue;
     }
 
+    // Non-negative check
     if (NON_NEGATIVE_METRICS.includes(metric.metricName) && metric.value < 0) {
       rejected.push({ metric, reason: `${metric.metricName}: unexpected negative value ${metric.value}` });
       continue;
+    }
+
+    // Ratio range: gjeldsgrad should not exceed 100x
+    if (metric.metricName === "gjeldsgrad" && (metric.value > 100 || metric.value < -10)) {
+      rejected.push({ metric, reason: `${metric.metricName}: value ${metric.value} outside valid range` });
+      continue;
+    }
+
+    // EPS sanity: reject if |value| > 10000 (likely unit error)
+    if (metric.metricName === "resultat_per_aksje" && Math.abs(metric.value) > 10000) {
+      rejected.push({ metric, reason: `${metric.metricName}: value ${metric.value} likely unit error` });
+      continue;
+    }
+
+    // Cross-metric: operating profit should not exceed revenue
+    if (metric.metricName === "driftsresultat") {
+      const revenue = byName.get("driftsinntekter");
+      if (revenue && revenue.unit !== "%" && metric.unit !== "%" && Math.abs(metric.value) > Math.abs(revenue.value) * 1.05) {
+        rejected.push({ metric, reason: `driftsresultat (${metric.value}) exceeds driftsinntekter (${revenue.value})` });
+        continue;
+      }
+    }
+
+    // Cross-metric: gross profit should not exceed revenue
+    if (metric.metricName === "bruttofortjeneste") {
+      const revenue = byName.get("driftsinntekter");
+      if (revenue && revenue.unit !== "%" && metric.unit !== "%" && metric.value > revenue.value * 1.05) {
+        rejected.push({ metric, reason: `bruttofortjeneste (${metric.value}) exceeds driftsinntekter (${revenue.value})` });
+        continue;
+      }
     }
 
     if (metric.confidence === "low") {
@@ -272,32 +309,60 @@ const EXTRACTION_PROMPT = `Du er en ekspert på norsk finansanalyse.
 
 Du mottar ferdig strukturerte finansielle tabeller (resultatregnskap, balanse, kontantstrøm) med eksplisitt enhetsangivelse. Tabellene er allerede identifisert og klassifisert — du trenger IKKE lete etter dem.
 
+OPPGAVE 0 — BESTEM RAPPORTTYPE:
+Avgjør FØRST om dette er en årsrapport eller kvartalsrapport:
+- Årsrapport: dokumenttittel/overskrift inneholder "Annual Report", "Årsrapport", "Annual Results", "Full Year", eller tabellene har KUN helårskolonner (FY/12M) uten frittstående kvartalskolonner.
+- Kvartalsrapport: dokumentet presenterer et enkelt kvartal som hovedperiode (Q1, Q2, Q3, Q4).
+Sett "reportType" basert på dette.
+
 OPPGAVE 1 — VELG RIKTIG KOLONNE:
-Hent alltid verdien for GJELDENDE rapporteringsperiode (frittstående kvartal, IKKE kumulativ).
-- Hvis tabellen har BÅDE "Q4 2025" og "12M 2025": bruk "Q4 2025"
-- Hvis tabellen har BÅDE "2Q 2025" og "6M 2025": bruk "2Q 2025"
+- ÅRSRAPPORT: Bruk helårskolonnen (12M, FY, eller årskolonnen). IKKE bruk Q4 selv om den finnes — Q4 er kun et supplement i en årsrapport.
+- KVARTALSRAPPORT: Bruk frittstående kvartalskolonne (IKKE kumulativ).
+  - Hvis tabellen har BÅDE "Q4 2025" og "12M 2025": bruk "Q4 2025"
+  - Hvis tabellen har BÅDE "2Q 2025" og "6M 2025": bruk "2Q 2025"
 - Forveksle IKKE med forrige-års sammenligning (f.eks. "Q4 2024") — det er historisk data.
 
 OPPGAVE 2 — STANDARDISER METRIKKNAVNENE:
 Bruk KUN disse navnene:
-- resultat: driftsinntekter, driftsresultat, ebitda, resultat_for_skatt, aarsresultat, resultat_per_aksje
-- balanse: sum_eiendeler, egenkapital, total_gjeld, kontanter, egenkapitalandel
+- resultat: driftsinntekter, varekostnad, bruttofortjeneste, personalkostnader, andre_driftskostnader, avskrivninger, nedskrivninger, driftsresultat, ebitda, finansinntekter, finanskostnader, resultat_for_skatt, skattekostnad, aarsresultat, resultat_per_aksje
+- balanse: goodwill, immaterielle_eiendeler, varige_driftsmidler, bruksrettseiendeler, andre_anleggsmidler, varer, kundefordringer, kontanter, sum_eiendeler, egenkapital, rentebærende_gjeld, annen_gjeld, total_gjeld
 - kontantstrøm: operasjonell_kontantstrom, investeringsaktiviteter, finansieringsaktiviteter, fri_kontantstrom, netto_endring_kontanter
-- nøkkeltall: driftsmargin, ebitda_margin, netto_margin, roe, roa, gjeldsgrad
+- nøkkeltall: driftsmargin, ebitda_margin, netto_margin, roe, roa, gjeldsgrad, egenkapitalandel
 
 Kartlegging:
-- Revenue / Total revenue / Omsetning / Driftsinntekter → "driftsinntekter"
-- Operating profit / EBIT / Operating result → "driftsresultat"
+- Revenue / Total revenue / Omsetning / Driftsinntekter / Net sales → "driftsinntekter"
+- Cost of goods sold / COGS / Raw materials / Varekostnad / Cost of sales → "varekostnad"
+- Gross profit / Bruttofortjeneste → "bruttofortjeneste"
+- Employee benefits / Personnel expenses / Lønnskostnader / Personalkostnader → "personalkostnader"
+- Other operating expenses / Andre driftskostnader / Other OpEx → "andre_driftskostnader"
+- Depreciation & amortisation / D&A / Avskrivninger (excl. impairment) → "avskrivninger"
+- Impairment loss / Goodwill impairment / Write-down / Nedskrivning → "nedskrivninger"
+- Operating profit / EBIT / Operating result / Driftsresultat → "driftsresultat"
 - EBITDA / EBITDAR → "ebitda"
-- Profit before tax / Resultat før skatt → "resultat_for_skatt"
+- Finance income / Interest income / Finansinntekter → "finansinntekter"
+- Finance expense / Finance costs / Interest expense / Finanskostnader → "finanskostnader"
+- Profit before tax / Resultat før skatt / EBT → "resultat_for_skatt"
+- Income tax expense / Tax / Skattekostnad → "skattekostnad"
 - Profit / Net income / Årsresultat → "aarsresultat"
+- Earnings per share / Basic EPS / Resultat per aksje → "resultat_per_aksje"
+- Goodwill → "goodwill"
+- Intangible assets / Immaterielle eiendeler → "immaterielle_eiendeler"
+- Property plant & equipment / PP&E / Varige driftsmidler → "varige_driftsmidler"
+- Right-of-use assets / Bruksrettseiendeler / ROU assets → "bruksrettseiendeler"
+- Other non-current assets / Andre anleggsmidler / Investments → "andre_anleggsmidler"
+- Inventories / Varelager / Varer → "varer"
+- Trade receivables / Accounts receivable / Kundefordringer → "kundefordringer"
+- Cash / Cash and cash equivalents / Kontanter / Bankinnskudd → "kontanter"
 - Total assets / Sum eiendeler → "sum_eiendeler"
-- Total equity / Egenkapital → "egenkapital"
-- Total liabilities / Total gjeld → "total_gjeld"
-- Cash / Cash and cash equivalents / Kontanter → "kontanter"
+- Total equity / Egenkapital / Shareholders' equity → "egenkapital"
+- Interest-bearing debt / Rentebærende gjeld / Financial liabilities → "rentebærende_gjeld"
+- Other liabilities / Trade payables / Annen gjeld / Non-interest-bearing → "annen_gjeld"
+- Total liabilities / Total gjeld / Sum gjeld → "total_gjeld"
 - Cash from operating activities → "operasjonell_kontantstrom"
 - Cash from investing activities → "investeringsaktiviteter"
 - Cash from financing activities → "finansieringsaktiviteter"
+- Free cash flow / FCF → "fri_kontantstrom"
+- Net change in cash / Netto endring kontanter → "netto_endring_kontanter"
 
 OPPGAVE 3 — NORMALISER VERDIER:
 Enheten for hver tabell er oppgitt i inndataen. Bruk den til å konvertere til MILLIONER.
@@ -305,8 +370,8 @@ Enheten for hver tabell er oppgitt i inndataen. Bruk den til å konvertere til M
 - Negative tall kan vises som (tall) eller -tall.
 - Behold full presisjon: 125897 i tusen → 125.897 MNOK, IKKE 126 MNOK.
 
-OPPGAVE 4 — FINN VALUTA:
-Se etter valutaindikatorer i tabelloverskriftene (NOK, EUR, USD, SEK, etc.).
+OPPGAVE 4 — BEKREFT VALUTA:
+Valutaen er allerede detektert fra tabelloverskriftene og oppgitt i enhetskonteksten ovenfor. Bruk denne. Hvis enhetskonteksten ikke inneholder valuta, se etter valutaindikatorer i tabellene (NOK, EUR, USD, SEK, etc.).
 
 Returner et JSON-objekt:
 {
@@ -320,6 +385,7 @@ Returner et JSON-objekt:
   "metrics": [
     {
       "metricName": "<standardisert navn>",
+      "sourceLabel": "<EKSAKT label fra kildetabellen, f.eks. 'Raw materials and consumables used'>",
       "value": <numerisk verdi i millioner>,
       "unit": "<MNOK|MEUR|MUSD|MSEK|MDKK|MGBP|%|x>",
       "category": "<resultat|balanse|kontantstrøm|nøkkeltall>",
@@ -337,31 +403,58 @@ Du mottar en USTRUKTURERT finansrapport som ren tekst (ikke tabeller). Finansiel
 OPPGAVE 1 — FINN FINANSOPPSTILLINGENE:
 Let etter seksjoner merket "Income statement", "Resultatregnskap", "Statement of financial position", "Balanse", "Statement of cash flows", "Kontantstrøm" eller lignende overskrifter.
 
+OPPGAVE 0 — BESTEM RAPPORTTYPE:
+Avgjør FØRST om dette er en årsrapport eller kvartalsrapport:
+- Årsrapport: dokumenttittel/overskrift inneholder "Annual Report", "Årsrapport", "Annual Results", "Full Year", eller dataene dekker kun helårsperioder.
+- Kvartalsrapport: dokumentet presenterer et enkelt kvartal som hovedperiode.
+Sett "reportType" basert på dette.
+
 OPPGAVE 2 — FORSTÅ KOLONNENE:
 Dataradene har formatet: Label verdi1 verdi2 verdi3...
-Den FØRSTE verdien er for gjeldende periode (frittstående kvartal). IGNORER alle andre verdier — de er sammenligningsperioder.
+- ÅRSRAPPORT: Første verdi er helårstallet. Bruk det.
+- KVARTALSRAPPORT: Første verdi er for gjeldende periode (frittstående kvartal).
+IGNORER alle andre verdier — de er sammenligningsperioder.
 
 OPPGAVE 3 — STANDARDISER METRIKKNAVNENE:
 Bruk KUN disse navnene:
-- resultat: driftsinntekter, driftsresultat, ebitda, resultat_for_skatt, aarsresultat, resultat_per_aksje
-- balanse: sum_eiendeler, egenkapital, total_gjeld, kontanter, egenkapitalandel
+- resultat: driftsinntekter, varekostnad, bruttofortjeneste, personalkostnader, andre_driftskostnader, avskrivninger, nedskrivninger, driftsresultat, ebitda, finansinntekter, finanskostnader, resultat_for_skatt, skattekostnad, aarsresultat, resultat_per_aksje
+- balanse: goodwill, immaterielle_eiendeler, varige_driftsmidler, bruksrettseiendeler, andre_anleggsmidler, varer, kundefordringer, kontanter, sum_eiendeler, egenkapital, rentebærende_gjeld, annen_gjeld, total_gjeld
 - kontantstrøm: operasjonell_kontantstrom, investeringsaktiviteter, finansieringsaktiviteter, fri_kontantstrom, netto_endring_kontanter
-- nøkkeltall: driftsmargin, ebitda_margin, netto_margin, roe, roa, gjeldsgrad
+- nøkkeltall: driftsmargin, ebitda_margin, netto_margin, roe, roa, gjeldsgrad, egenkapitalandel
 
 Kartlegging:
 - Revenue / Total revenue / Operating revenues → "driftsinntekter"
+- Cost of goods sold / COGS / Raw materials → "varekostnad"
+- Gross profit / Bruttofortjeneste → "bruttofortjeneste"
+- Employee benefits / Personnel expenses / Lønnskostnader → "personalkostnader"
+- Other operating expenses / Andre driftskostnader → "andre_driftskostnader"
+- Depreciation & amortisation / D&A / Avskrivninger → "avskrivninger"
+- Impairment loss / Goodwill impairment / Write-down / Nedskrivning → "nedskrivninger"
 - Operating profit / EBIT / Operating result / Operating profit / loss → "driftsresultat"
 - Gross operating profit / EBITDA → "ebitda"
+- Finance income / Interest income / Finansinntekter → "finansinntekter"
+- Finance expense / Finance costs / Interest expense / Finanskostnader → "finanskostnader"
 - Profit before tax / Profit / loss before taxes → "resultat_for_skatt" (bruk TOTAL, inkludert discontinued operations)
+- Income tax expense / Tax / Skattekostnad → "skattekostnad"
 - Profit / loss / Net income / Profit for the period → "aarsresultat" (bruk TOTAL Profit/loss, IKKE bare "from continuing operations")
 - Earnings per share / Basic EPS → "resultat_per_aksje" (bruk TOTAL, ikke bare continuing operations)
+- Goodwill → "goodwill"
+- Intangible assets / Immaterielle eiendeler → "immaterielle_eiendeler"
+- Property plant & equipment / PP&E / Varige driftsmidler → "varige_driftsmidler"
+- Right-of-use assets / Bruksrettseiendeler → "bruksrettseiendeler"
+- Other non-current assets / Andre anleggsmidler → "andre_anleggsmidler"
+- Inventories / Varelager → "varer"
+- Trade receivables / Accounts receivable / Kundefordringer → "kundefordringer"
+- Cash / Cash and cash equivalents / Kontanter → "kontanter"
 - Total assets / Sum eiendeler → "sum_eiendeler"
 - Equity / Total equity / Equity attributable to owners → "egenkapital" (bruk TOTAL equity inkl. non-controlling interests)
+- Interest-bearing debt / Rentebærende gjeld / Financial liabilities → "rentebærende_gjeld"
+- Other liabilities / Trade payables / Annen gjeld → "annen_gjeld"
 - Total liabilities → "total_gjeld" (beregn som Total assets - Equity hvis ikke oppgitt direkte)
-- Cash / Cash and cash equivalents → "kontanter"
 - Net cash flow from operating activities → "operasjonell_kontantstrom" (bruk TOTAL, ikke bare continuing operations)
 - Net cash flow from investing activities → "investeringsaktiviteter" (bruk TOTAL)
 - Net cash flow from financing activities → "finansieringsaktiviteter" (bruk TOTAL)
+- Free cash flow / FCF → "fri_kontantstrom"
 - Net increase / decrease in cash → "netto_endring_kontanter"
 
 VIKTIG OM DISCONTINUED OPERATIONS:
@@ -388,6 +481,7 @@ Returner et JSON-objekt:
   "metrics": [
     {
       "metricName": "<standardisert navn>",
+      "sourceLabel": "<EKSAKT label fra kildeteksten>",
       "value": <numerisk verdi i millioner>,
       "unit": "<MNOK|MEUR|MUSD|MSEK|MDKK|MGBP|%|x>",
       "category": "<resultat|balanse|kontantstrøm|nøkkeltall>",
@@ -423,6 +517,16 @@ function stripNumericSeparators(text: string): string {
   return text;
 }
 
+/**
+ * Cross-validate reportType against the canonicalized period.
+ * FY period → must be årsrapport; quarterly period → must be kvartalsrapport.
+ */
+function reconcileReportType(period: string, reportType: string): string {
+  if (period.endsWith("-FY")) return "årsrapport";
+  if (/-Q[1-4]$/.test(period) && reportType === "årsrapport") return "kvartalsrapport";
+  return reportType;
+}
+
 export async function extractFinancialData(markdown: string): Promise<ExtractionResult> {
   const { getOpenAI } = await import("./openai");
 
@@ -445,7 +549,7 @@ export async function extractFinancialData(markdown: string): Promise<Extraction
 
   const parsed = JSON.parse(content);
   const period = canonicalizePeriod(parsed.period || "");
-  const reportType = parsed.reportType || "annet";
+  const reportType = reconcileReportType(period, parsed.reportType || "annet");
   const currency = parsed.currency || undefined;
   const originalUnit = parsed.originalUnit || undefined;
   const unitEvidence = parsed.unitEvidence || undefined;
@@ -505,7 +609,7 @@ export async function extractWithFeedback(
 
   const parsed = JSON.parse(content);
   const period = canonicalizePeriod(parsed.period || "");
-  const reportType = parsed.reportType || "annet";
+  const reportType = reconcileReportType(period, parsed.reportType || "annet");
   const currency = parsed.currency || undefined;
   const originalUnit = parsed.originalUnit || undefined;
   const unitEvidence = parsed.unitEvidence || undefined;
