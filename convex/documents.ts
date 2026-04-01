@@ -70,7 +70,10 @@ export const updateStatus = mutation({
     if (!userId) throw new Error("Ikke autentisert");
     const doc = await ctx.db.get(args.id);
     if (!doc) throw new Error("Dokument ikke funnet");
-    if (doc.uploadedBy && doc.uploadedBy !== userId) {
+    const identity = await ctx.auth.getUserIdentity();
+    const adminEmails = ["s2419213@bi.no"];
+    const isAdmin = identity?.email && adminEmails.includes(identity.email);
+    if (!isAdmin && doc.uploadedBy && doc.uploadedBy !== userId) {
       throw new Error("Ingen tilgang til dette dokumentet");
     }
     const { id, clearR2Key, ...fields } = args;

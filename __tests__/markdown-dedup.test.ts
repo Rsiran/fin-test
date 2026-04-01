@@ -106,17 +106,24 @@ describe("deduplicateMarkdown", () => {
       const input = [
         "---",
         "<!-- PAGE 1 -->",
-        "| Some random row | 100 |",
-        "| Another random row | 200 |",
-        "| Unknown data | 300 |",
+        "| Random A | 100 |",
+        "| Random B | 200 |",
+        "| Random C | 300 |",
         "| Driftsinntekter | 1000 |",
-        "| More random stuff | 400 |",
+        "| Random D | 400 |",
+        "| Random E | 500 |",
+        "| Random F | 600 |",
+        "| Egenkapital | 2000 |",
+        "| Random G | 700 |",
       ].join("\n");
 
       const result = deduplicateMarkdown(input);
+      // With only 2 out of 9 non-empty lines classified (22%), should skip
+      // Output should preserve original order
       const lines = result.split("\n").filter((l) => l.includes("|"));
-      expect(lines[0]).toContain("Some random row");
+      expect(lines[0]).toContain("Random A");
       expect(lines[3]).toContain("Driftsinntekter");
+      expect(lines[7]).toContain("Egenkapital");
     });
 
     it("handles pages with only one statement type (no-op)", () => {

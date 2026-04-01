@@ -24,11 +24,14 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
   const handleReprocess = async (docId: Id<"documents">) => {
     setReprocessingIds((prev) => new Set(prev).add(docId));
     try {
-      await fetch("/api/upload/process", {
+      const res = await fetch("/api/upload/process", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ docId, reprocess: true }),
       });
+      if (!res.ok) {
+        console.error("Re-process failed:", await res.text());
+      }
     } finally {
       setTimeout(() => {
         setReprocessingIds((prev) => {

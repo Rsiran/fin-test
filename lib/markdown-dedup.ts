@@ -12,8 +12,8 @@ function splitByPages(markdown: string): Page[] {
   }
 
   const pages: Page[] = [];
-  const preamble = parts[0].trim();
-  if (preamble) {
+  const preamble = parts[0];
+  if (preamble.trim()) {
     pages.push({ pageNumber: 0, content: preamble });
   }
 
@@ -34,11 +34,12 @@ function normalizeLines(content: string): string[] {
 }
 
 function overlapRatio(a: string[], b: string[]): number {
-  if (a.length === 0 && b.length === 0) return 1;
-  if (a.length === 0 || b.length === 0) return 0;
+  const setA = new Set(a);
   const setB = new Set(b);
-  const shared = a.filter((line) => setB.has(line)).length;
-  return shared / Math.min(a.length, b.length);
+  if (setA.size === 0 && setB.size === 0) return 1;
+  if (setA.size === 0 || setB.size === 0) return 0;
+  const shared = [...setA].filter((line) => setB.has(line)).length;
+  return shared / Math.min(setA.size, setB.size);
 }
 
 function deduplicatePages(pages: Page[]): Page[] {
