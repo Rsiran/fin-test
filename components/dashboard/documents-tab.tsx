@@ -69,7 +69,8 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
       for (const doc of selected) {
         const res = await fetch(doc.markdownUrl!);
         const text = await res.text();
-        zip.file(doc.fileName.replace(/\.pdf$/i, ".md"), text);
+        const mdName = doc.fileName.replace(/\.[^.]+$/, "") + ".md";
+        zip.file(mdName, text);
       }
       const blob = await zip.generateAsync({ type: "blob" });
       const url = URL.createObjectURL(blob);
