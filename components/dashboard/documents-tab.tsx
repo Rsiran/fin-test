@@ -160,18 +160,35 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
             <thead>
               <tr className="border-b border-white/5">
                 <th className="py-3 px-4 w-10">
-                  <input
-                    type="checkbox"
-                    checked={
-                      !!downloadableDocs?.length &&
+                  <button
+                    onClick={toggleSelectAll}
+                    className="flex items-center justify-center"
+                    title="Velg alle"
+                  >
+                    <span
+                      className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors duration-150 ${
+                        !!downloadableDocs?.length &&
+                        downloadableDocs.every((d: { _id: string }) =>
+                          selectedIds.has(d._id)
+                        )
+                          ? "bg-accent border-accent"
+                          : selectedIds.size > 0
+                          ? "border-accent bg-accent/20"
+                          : "border-white/20 bg-transparent"
+                      }`}
+                    >
+                      {!!downloadableDocs?.length &&
                       downloadableDocs.every((d: { _id: string }) =>
                         selectedIds.has(d._id)
-                      )
-                    }
-                    onChange={toggleSelectAll}
-                    className="accent-[var(--color-accent)] cursor-pointer"
-                    title="Velg alle"
-                  />
+                      ) ? (
+                        <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                          <path d="M1 4l2.5 2.5L9 1" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      ) : selectedIds.size > 0 ? (
+                        <span className="w-2 h-0.5 bg-accent rounded-full" />
+                      ) : null}
+                    </span>
+                  </button>
                 </th>
                 <th className="text-left py-3 px-4 text-[9px] uppercase tracking-[1px] text-[#666666] font-sans">
                   Filnavn
@@ -196,12 +213,24 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
                 >
                   <td className="py-3 px-4 w-10">
                     {doc.markdownUrl && (
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(doc._id)}
-                        onChange={() => toggleSelect(doc._id)}
-                        className="accent-[var(--color-accent)] cursor-pointer"
-                      />
+                      <button
+                        onClick={() => toggleSelect(doc._id)}
+                        className="flex items-center justify-center"
+                      >
+                        <span
+                          className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors duration-150 ${
+                            selectedIds.has(doc._id)
+                              ? "bg-accent border-accent"
+                              : "border-white/20 bg-transparent hover:border-white/40"
+                          }`}
+                        >
+                          {selectedIds.has(doc._id) && (
+                            <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                              <path d="M1 4l2.5 2.5L9 1" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          )}
+                        </span>
+                      </button>
                     )}
                   </td>
                   <td className="py-3 px-4 font-sans text-sm">{doc.fileName}</td>
