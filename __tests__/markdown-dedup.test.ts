@@ -66,4 +66,73 @@ describe("deduplicateMarkdown", () => {
       expect(result).toContain("Total assets");
     });
   });
+
+  describe("deinterleaving", () => {
+    it("separates interleaved P&L and balance sheet rows", () => {
+      const input = [
+        "---",
+        "<!-- PAGE 1 -->",
+        "| Driftsinntekter | 1000 | 900 |",
+        "| Sum eiendeler | 5000 | 4500 |",
+        "| Varekostnad | 400 | 350 |",
+        "| Egenkapital | 2000 | 1800 |",
+        "| Driftsresultat | 200 | 180 |",
+        "| Total gjeld | 3000 | 2700 |",
+      ].join("\n");
+
+      const result = deduplicateMarkdown(input);
+      const lines = result.split("\n").filter((l) => l.trim().length > 0);
+
+      const revenueIdx = lines.findIndex((l) => l.includes("Driftsinntekter"));
+      const cogsIdx = lines.findIndex((l) => l.includes("Varekostnad"));
+      const ebitIdx = lines.findIndex((l) => l.includes("Driftsresultat"));
+      const assetsIdx = lines.findIndex((l) => l.includes("Sum eiendeler"));
+      const equityIdx = lines.findIndex((l) => l.includes("Egenkapital"));
+      const debtIdx = lines.findIndex((l) => l.includes("Total gjeld"));
+
+      // P&L rows grouped together
+      expect(revenueIdx).toBeLessThan(cogsIdx);
+      expect(cogsIdx).toBeLessThan(ebitIdx);
+
+      // BS rows grouped together
+      expect(assetsIdx).toBeLessThan(equityIdx);
+      expect(equityIdx).toBeLessThan(debtIdx);
+
+      // P&L block before BS block (canonical order)
+      expect(ebitIdx).toBeLessThan(assetsIdx);
+    });
+
+    it("skips deinterleaving when confidence is below 60%", () => {
+      const input = [
+        "---",
+        "<!-- PAGE 1 -->",
+        "| Some random row | 100 |",
+        "| Another random row | 200 |",
+        "| Unknown data | 300 |",
+        "| Driftsinntekter | 1000 |",
+        "| More random stuff | 400 |",
+      ].join("\n");
+
+      const result = deduplicateMarkdown(input);
+      const lines = result.split("\n").filter((l) => l.includes("|"));
+      expect(lines[0]).toContain("Some random row");
+      expect(lines[3]).toContain("Driftsinntekter");
+    });
+
+    it("handles pages with only one statement type (no-op)", () => {
+      const input = [
+        "---",
+        "<!-- PAGE 1 -->",
+        "# Resultatregnskap",
+        "| Driftsinntekter | 1000 |",
+        "| Varekostnad | 400 |",
+        "| Driftsresultat | 200 |",
+      ].join("\n");
+
+      const result = deduplicateMarkdown(input);
+      expect(result).toContain("Driftsinntekter");
+      expect(result).toContain("Varekostnad");
+      expect(result).toContain("Driftsresultat");
+    });
+  });
 });
