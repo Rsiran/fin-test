@@ -22,6 +22,7 @@ function makeClassified(
       lineNumber: 0,
       unitIndicator: null,
       detectedUnit: null,
+      detectedCurrency: null,
       ...overrides,
     },
   };
@@ -38,14 +39,14 @@ describe("resolveUnits", () => {
     expect(resolved[1].resolvedUnit).toBe("thousands");
   });
 
-  it("falls back to cross-table consistency when a table has no unit", () => {
+  it("does not inherit unit from other tables — each table stands alone", () => {
     const tables = [
       makeClassified("income_statement", { detectedUnit: "thousands", unitIndicator: "NOK 1000" }),
       makeClassified("balance_sheet", { detectedUnit: null, unitIndicator: null }),
     ];
     const resolved = resolveUnits(tables);
     expect(resolved[0].resolvedUnit).toBe("thousands");
-    expect(resolved[1].resolvedUnit).toBe("thousands");
+    expect(resolved[1].resolvedUnit).toBeNull();
   });
 
   it("does not override an explicit unit with cross-table fallback", () => {

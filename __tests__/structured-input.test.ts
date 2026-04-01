@@ -13,6 +13,7 @@ function makeResolved(
   return {
     classification,
     resolvedUnit,
+    resolvedCurrency: null,
     unitContext: resolvedUnit === "thousands" ? "Values are in thousands. Divide by 1000 to get millions." : "",
     table: {
       heading,
@@ -22,6 +23,7 @@ function makeResolved(
       lineNumber: 0,
       unitIndicator: null,
       detectedUnit: resolvedUnit,
+      detectedCurrency: null,
     },
   };
 }

@@ -16,7 +16,7 @@ export function buildStructuredInput(tables: ResolvedTable[]): string {
 
   for (const rt of financialTables) {
     const label = LABEL_MAP[rt.classification] ?? rt.classification.toUpperCase();
-    const columns = rt.table.headerRow.slice(1).join(" | "); // skip first cell (label column)
+    const columns = rt.table.headerRow.slice(1).join(" | ");
     const unitLine = rt.unitContext ? ` (${rt.unitContext})` : "";
 
     const lines: string[] = [];

@@ -8,6 +8,7 @@ interface ClassifiedTable {
 
 export interface ResolvedTable extends ClassifiedTable {
   resolvedUnit: ParsedTable["detectedUnit"];
+  resolvedCurrency: string | null;
   unitContext: string;
 }
 
@@ -19,19 +20,34 @@ const UNIT_CONTEXT: Record<string, string> = {
 };
 
 export function resolveUnits(tables: ClassifiedTable[]): ResolvedTable[] {
-  // Find the first financial statement table with an explicit unit
   const financialTypes: TableClass[] = ["income_statement", "balance_sheet", "cash_flow"];
-  const referenceUnit = tables
-    .filter((t) => financialTypes.includes(t.classification) && t.table.detectedUnit)
-    .map((t) => t.table.detectedUnit)[0] ?? null;
 
-  return tables.map((ct) => {
-    // Use the table's own unit if it has one, otherwise fall back to reference
-    const resolvedUnit = ct.table.detectedUnit ?? referenceUnit;
+  const resolved = tables.map((ct) => {
+    const resolvedUnit = ct.table.detectedUnit;
+    const resolvedCurrency = ct.table.detectedCurrency ?? null;
+    const currencyLabel = resolvedCurrency ? ` ${resolvedCurrency}` : "";
     const unitContext = resolvedUnit
-      ? UNIT_CONTEXT[resolvedUnit] ?? ""
+      ? `${UNIT_CONTEXT[resolvedUnit]}${currencyLabel ? ` Currency:${currencyLabel}.` : ""}`
       : "No unit detected. Infer from value magnitudes.";
 
-    return { ...ct, resolvedUnit, unitContext };
+    return { ...ct, resolvedUnit, resolvedCurrency, unitContext };
   });
+
+  // Consistency warning: check if financial tables disagree on unit or currency
+  const financialTables = resolved.filter((t) => financialTypes.includes(t.classification));
+  const explicitUnits = financialTables.filter((t) => t.resolvedUnit).map((t) => t.resolvedUnit);
+  const explicitCurrencies = financialTables.filter((t) => t.resolvedCurrency).map((t) => t.resolvedCurrency);
+
+  if (new Set(explicitUnits).size > 1) {
+    console.warn(
+      `[unit-resolver] Conflicting units across financial tables: ${[...new Set(explicitUnits)].join(", ")}`
+    );
+  }
+  if (new Set(explicitCurrencies).size > 1) {
+    console.warn(
+      `[unit-resolver] Conflicting currencies across financial tables: ${[...new Set(explicitCurrencies)].join(", ")}`
+    );
+  }
+
+  return resolved;
 }
