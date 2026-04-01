@@ -84,6 +84,7 @@ export const getByCompany = query({
           metricName: ratio.name,
           value: Math.round((num.value / den.value) * 1000) / 10,
           unit: "%",
+          sourceLabel: undefined,
           createdAt: 0,
         });
       }
