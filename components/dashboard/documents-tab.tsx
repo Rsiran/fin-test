@@ -308,7 +308,7 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
                   </td>
                   <td className="py-3 px-4 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      {(isAdmin || doc.uploadedBy === currentUserId) && doc.r2Key && (
+                      {(isAdmin || doc.uploadedBy === currentUserId) && doc.r2Key && (doc.status === "ready" || doc.status === "error") && (
                         <button
                           onClick={() => handleReprocess(doc._id)}
                           disabled={reprocessingIds.has(doc._id) || doc.status === "processing"}

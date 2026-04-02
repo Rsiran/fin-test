@@ -243,14 +243,22 @@ export async function POST(req: NextRequest) {
 
     if (reprocess) {
       // Re-process: reset document and re-run pipeline
-      const { r2Key, companyId } = await convex.mutation(
+      const { r2Key, companyId, oldMarkdownFileId } = await convex.mutation(
         api.documents.resetForReprocessing,
         { id: typedDocId }
       );
 
-      enqueueProcessing(() =>
-        processInBackground(convex, typedDocId, companyId, r2Key)
-      );
+      enqueueProcessing(async () => {
+        await processInBackground(convex, typedDocId, companyId, r2Key);
+        // Clean up old markdown only after successful processing
+        if (oldMarkdownFileId) {
+          try {
+            await convex.mutation(api.documents.deleteStorageFile, { fileId: oldMarkdownFileId });
+          } catch {
+            console.warn(`Failed to delete old markdown file ${oldMarkdownFileId}`);
+          }
+        }
+      });
 
       return NextResponse.json({ docId, status: "reprocessing" });
     }

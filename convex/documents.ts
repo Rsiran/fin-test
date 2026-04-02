@@ -125,21 +125,19 @@ export const resetForReprocessing = mutation({
       await ctx.db.delete(metric._id);
     }
 
-    // Delete old markdown file
-    if (doc.markdownFileId) {
-      await ctx.storage.delete(doc.markdownFileId);
-    }
+    // Don't delete the old markdown file yet — return its ID so the
+    // caller can clean it up AFTER new markdown is successfully stored.
+    const oldMarkdownFileId = doc.markdownFileId;
 
-    // Reset status
+    // Reset status (keep markdownFileId intact until replaced)
     await ctx.db.patch(args.id, {
       status: "processing",
-      markdownFileId: undefined,
       extractionQuality: undefined,
       normalizationWarning: undefined,
       errorMessage: undefined,
     });
 
-    return { r2Key: doc.r2Key, companyId: doc.companyId };
+    return { r2Key: doc.r2Key, companyId: doc.companyId, oldMarkdownFileId };
   },
 });
 
@@ -201,12 +199,15 @@ export const get = query({
     if (!userId) return null;
     const doc = await ctx.db.get(args.id);
     if (!doc) return null;
-    if (doc.uploadedBy && doc.uploadedBy !== userId) return null;
+    const identity = await ctx.auth.getUserIdentity();
+    const adminEmails = ["s2419213@bi.no"];
+    const isAdmin = identity?.email && adminEmails.includes(identity.email);
+    if (!isAdmin && doc.uploadedBy && doc.uploadedBy !== userId) return null;
     return doc;
   },
 });
 
-/** Owner-only query that includes the storage download URL. */
+/** Owner-or-admin query that includes the storage download URL. */
 export const getWithFileUrl = query({
   args: { id: v.id("documents") },
   handler: async (ctx, args) => {
@@ -214,7 +215,10 @@ export const getWithFileUrl = query({
     if (!userId) return null;
     const doc = await ctx.db.get(args.id);
     if (!doc) return null;
-    if (doc.uploadedBy !== userId) return null;
+    const identity = await ctx.auth.getUserIdentity();
+    const adminEmails = ["s2419213@bi.no"];
+    const isAdmin = identity?.email && adminEmails.includes(identity.email);
+    if (!isAdmin && doc.uploadedBy !== userId) return null;
     const fileUrl = doc.fileId ? await ctx.storage.getUrl(doc.fileId) : null;
     return { ...doc, fileUrl };
   },
@@ -225,5 +229,14 @@ export const generateUploadUrl = mutation({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Ikke autentisert");
     return await ctx.storage.generateUploadUrl();
+  },
+});
+
+export const deleteStorageFile = mutation({
+  args: { fileId: v.id("_storage") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Ikke autentisert");
+    await ctx.storage.delete(args.fileId);
   },
 });
