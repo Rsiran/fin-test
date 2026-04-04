@@ -8,7 +8,8 @@ import { generateEmbeddings } from "@/lib/embeddings";
 import { extractWithRetry } from "@/lib/extraction-orchestrator";
 import { periodToFileName } from "@/lib/period-format";
 import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
-import { downloadToFile, deleteObject } from "@/lib/r2";
+import { downloadToFile } from "@/lib/r2";
+import { deduplicateMarkdown } from "@/lib/markdown-dedup";
 import { mkdtemp, readFile, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -96,7 +97,11 @@ async function doProcessing(
 
   // 4. Convert PDF to Markdown
   console.log(`Processing ${docId}: converting PDF to markdown`);
-  const markdown = await convertPdfToMarkdown(pdfBuffer);
+  const rawMarkdown = await convertPdfToMarkdown(pdfBuffer);
+
+  // 4b. Deduplicate and deinterleave
+  console.log(`Processing ${docId}: deduplicating markdown`);
+  const markdown = deduplicateMarkdown(rawMarkdown);
 
   // 5. Store markdown in Convex file storage
   const mdUploadUrl = await convex.mutation(
@@ -187,10 +192,7 @@ async function doProcessing(
     });
   }
 
-  // 11. Delete PDF from R2 (best-effort)
-  await deleteObject(r2Key);
-
-  // 12. Update document status to ready, clear r2Key
+  // 11. Update document status to ready
   // Guard: if timeout already set status to "error", don't overwrite
   const currentDoc = await convex.query(api.documents.get, { id: docId });
   if (currentDoc && currentDoc.status !== "error") {
@@ -209,7 +211,6 @@ async function doProcessing(
       normalizationWarning,
       extractionQuality: extractionResult.quality?.score,
       ...(standardizedName ? { fileName: standardizedName } : {}),
-      clearR2Key: true,
     });
     console.log(`Processing ${docId}: complete`);
   } else {
@@ -227,7 +228,10 @@ export async function POST(req: NextRequest) {
     const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
     convex.setAuth(token);
 
-    const { docId } = (await req.json()) as { docId: string };
+    const { docId, reprocess } = (await req.json()) as {
+      docId: string;
+      reprocess?: boolean;
+    };
     if (!docId) {
       return NextResponse.json(
         { error: "docId is required" },
@@ -237,6 +241,29 @@ export async function POST(req: NextRequest) {
 
     const typedDocId = docId as Id<"documents">;
 
+    if (reprocess) {
+      // Re-process: reset document and re-run pipeline
+      const { r2Key, companyId, oldMarkdownFileId } = await convex.mutation(
+        api.documents.resetForReprocessing,
+        { id: typedDocId }
+      );
+
+      enqueueProcessing(async () => {
+        await processInBackground(convex, typedDocId, companyId, r2Key);
+        // Clean up old markdown only after successful processing
+        if (oldMarkdownFileId) {
+          try {
+            await convex.mutation(api.documents.deleteStorageFile, { fileId: oldMarkdownFileId });
+          } catch {
+            console.warn(`Failed to delete old markdown file ${oldMarkdownFileId}`);
+          }
+        }
+      });
+
+      return NextResponse.json({ docId, status: "reprocessing" });
+    }
+
+    // Original upload flow
     const doc = await convex.query(api.documents.get, { id: typedDocId });
     if (!doc) {
       return NextResponse.json(
@@ -251,16 +278,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Set status to "processing"
     await convex.mutation(api.documents.updateStatus, {
       id: typedDocId,
       status: "processing",
     });
 
-    // Capture r2Key after the guard — guaranteed to be defined here
     const r2Key = doc.r2Key;
 
-    // Enqueue for sequential processing — only one Java process at a time
     enqueueProcessing(() =>
       processInBackground(convex, typedDocId, doc.companyId, r2Key)
     );

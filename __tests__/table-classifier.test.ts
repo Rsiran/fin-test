@@ -150,4 +150,46 @@ describe("classifyTable", () => {
       )
     ).toBe("income_statement");
   });
+
+  it("classifies IFRS Norwegian income statement headings", () => {
+    expect(
+      classifyTable(makeTable({ heading: "Oppstilling over resultat" }))
+    ).toBe("income_statement");
+  });
+
+  it("classifies consolidated income statement (konsernresultat)", () => {
+    expect(
+      classifyTable(makeTable({ heading: "Konsernresultat" }))
+    ).toBe("income_statement");
+  });
+
+  it("classifies combined P&L+OCI heading", () => {
+    expect(
+      classifyTable(makeTable({ heading: "Oppstilling over totalresultat" }))
+    ).toBe("income_statement");
+  });
+
+  it("classifies IFRS Norwegian balance sheet heading", () => {
+    expect(
+      classifyTable(makeTable({ heading: "Oppstilling over finansiell stilling" }))
+    ).toBe("balance_sheet");
+  });
+
+  it("classifies consolidated balance sheet (konsernbalanse)", () => {
+    expect(
+      classifyTable(makeTable({ heading: "Konsernbalanse" }))
+    ).toBe("balance_sheet");
+  });
+
+  it("classifies IFRS Norwegian cash flow heading", () => {
+    expect(
+      classifyTable(makeTable({ heading: "Oppstilling over kontantstrømmer" }))
+    ).toBe("cash_flow");
+  });
+
+  it("classifies consolidated cash flow heading", () => {
+    expect(
+      classifyTable(makeTable({ heading: "Konsernets kontantstrømoppstilling" }))
+    ).toBe("cash_flow");
+  });
 });

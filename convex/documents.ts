@@ -70,7 +70,10 @@ export const updateStatus = mutation({
     if (!userId) throw new Error("Ikke autentisert");
     const doc = await ctx.db.get(args.id);
     if (!doc) throw new Error("Dokument ikke funnet");
-    if (doc.uploadedBy && doc.uploadedBy !== userId) {
+    const identity = await ctx.auth.getUserIdentity();
+    const adminEmails = ["s2419213@bi.no"];
+    const isAdmin = identity?.email && adminEmails.includes(identity.email);
+    if (!isAdmin && doc.uploadedBy && doc.uploadedBy !== userId) {
       throw new Error("Ingen tilgang til dette dokumentet");
     }
     const { id, clearR2Key, ...fields } = args;
@@ -82,6 +85,59 @@ export const updateStatus = mutation({
       patch.r2Key = undefined;
     }
     await ctx.db.patch(id, patch);
+  },
+});
+
+export const resetForReprocessing = mutation({
+  args: { id: v.id("documents") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Ikke autentisert");
+    const doc = await ctx.db.get(args.id);
+    if (!doc) throw new Error("Dokument ikke funnet");
+
+    // Admin or owner check
+    const identity = await ctx.auth.getUserIdentity();
+    const adminEmails = ["s2419213@bi.no"];
+    const isAdmin = identity?.email && adminEmails.includes(identity.email);
+    if (!isAdmin && doc.uploadedBy && doc.uploadedBy !== userId) {
+      throw new Error("Ingen tilgang");
+    }
+
+    if (!doc.r2Key) throw new Error("PDF ikke tilgjengelig for re-prosessering");
+
+    // Delete existing chunks
+    const chunks = await ctx.db
+      .query("chunks")
+      .withIndex("by_document", (q) => q.eq("documentId", args.id))
+      .collect();
+    for (const chunk of chunks) {
+      await ctx.db.delete(chunk._id);
+    }
+
+    // Delete existing metrics
+    const metrics = await ctx.db
+      .query("financialMetrics")
+      .withIndex("by_company", (q) => q.eq("companyId", doc.companyId))
+      .filter((q) => q.eq(q.field("documentId"), args.id))
+      .collect();
+    for (const metric of metrics) {
+      await ctx.db.delete(metric._id);
+    }
+
+    // Don't delete the old markdown file yet — return its ID so the
+    // caller can clean it up AFTER new markdown is successfully stored.
+    const oldMarkdownFileId = doc.markdownFileId;
+
+    // Reset status (keep markdownFileId intact until replaced)
+    await ctx.db.patch(args.id, {
+      status: "processing",
+      extractionQuality: undefined,
+      normalizationWarning: undefined,
+      errorMessage: undefined,
+    });
+
+    return { r2Key: doc.r2Key, companyId: doc.companyId, oldMarkdownFileId };
   },
 });
 
@@ -143,12 +199,15 @@ export const get = query({
     if (!userId) return null;
     const doc = await ctx.db.get(args.id);
     if (!doc) return null;
-    if (doc.uploadedBy && doc.uploadedBy !== userId) return null;
+    const identity = await ctx.auth.getUserIdentity();
+    const adminEmails = ["s2419213@bi.no"];
+    const isAdmin = identity?.email && adminEmails.includes(identity.email);
+    if (!isAdmin && doc.uploadedBy && doc.uploadedBy !== userId) return null;
     return doc;
   },
 });
 
-/** Owner-only query that includes the storage download URL. */
+/** Owner-or-admin query that includes the storage download URL. */
 export const getWithFileUrl = query({
   args: { id: v.id("documents") },
   handler: async (ctx, args) => {
@@ -156,7 +215,10 @@ export const getWithFileUrl = query({
     if (!userId) return null;
     const doc = await ctx.db.get(args.id);
     if (!doc) return null;
-    if (doc.uploadedBy !== userId) return null;
+    const identity = await ctx.auth.getUserIdentity();
+    const adminEmails = ["s2419213@bi.no"];
+    const isAdmin = identity?.email && adminEmails.includes(identity.email);
+    if (!isAdmin && doc.uploadedBy !== userId) return null;
     const fileUrl = doc.fileId ? await ctx.storage.getUrl(doc.fileId) : null;
     return { ...doc, fileUrl };
   },
@@ -167,5 +229,14 @@ export const generateUploadUrl = mutation({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Ikke autentisert");
     return await ctx.storage.generateUploadUrl();
+  },
+});
+
+export const deleteStorageFile = mutation({
+  args: { fileId: v.id("_storage") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Ikke autentisert");
+    await ctx.storage.delete(args.fileId);
   },
 });
