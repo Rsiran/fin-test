@@ -14,6 +14,10 @@ const INCOME_HEADING = [
   "income statement",
   "comprehensive income",
   "profit and loss",
+  "oppstilling over resultat",
+  "oppstilling over totalresultat",
+  "konsernresultat",
+  "konsernresultatregnskap",
 ];
 
 const INCOME_ROWS = [
@@ -28,6 +32,8 @@ const BALANCE_HEADING = [
   "financial position",
   "balanse",
   "balance sheet",
+  "oppstilling over finansiell stilling",
+  "konsernbalanse",
 ];
 
 const BALANCE_ROWS = [
@@ -42,6 +48,8 @@ const CASHFLOW_HEADING = [
   "cash flow",
   "kontantstrøm",
   "kontantstrømoppstilling",
+  "oppstilling over kontantstrømmer",
+  "konsernets kontantstrømoppstilling",
 ];
 
 const CASHFLOW_ROWS = [
