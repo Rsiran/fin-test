@@ -126,6 +126,28 @@ describe("deduplicateMarkdown", () => {
       expect(lines[7]).toContain("Egenkapital");
     });
 
+    it("does not scramble a pure cash-flow page (kontanter is not balance sheet)", () => {
+      // "Netto endring i kontanter" contains the BS keyword "kontanter";
+      // if classified as balance_sheet the page looks interleaved and the
+      // closing row gets moved above the heading.
+      const input = [
+        "---",
+        "<!-- PAGE 1 -->",
+        "## Oppstilling over kontantstrømmer",
+        "| Kontantstrøm fra driftsaktiviteter | 2900 |",
+        "| Kontantstrøm fra investeringsaktiviteter | -1200 |",
+        "| Kontantstrøm fra finansieringsaktiviteter | -1100 |",
+        "| Netto endring i kontanter | 600 |",
+      ].join("\n");
+
+      const result = deduplicateMarkdown(input);
+      const lines = result.split("\n").filter((l) => l.trim().length > 0);
+      const headingIdx = lines.findIndex((l) => l.includes("Oppstilling over kontantstrømmer"));
+      const netChangeIdx = lines.findIndex((l) => l.includes("Netto endring i kontanter"));
+      expect(headingIdx).toBeLessThan(netChangeIdx);
+      expect(netChangeIdx).toBe(lines.length - 1);
+    });
+
     it("handles pages with only one statement type (no-op)", () => {
       const input = [
         "---",

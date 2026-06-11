@@ -311,7 +311,7 @@ export function DocumentsTab({ companyId }: { companyId: Id<"companies"> }) {
                       {(isAdmin || doc.uploadedBy === currentUserId) && doc.r2Key && (doc.status === "ready" || doc.status === "error") && (
                         <button
                           onClick={() => handleReprocess(doc._id)}
-                          disabled={reprocessingIds.has(doc._id) || doc.status === "processing"}
+                          disabled={reprocessingIds.has(doc._id)}
                           className="text-[#666666] hover:text-accent transition-colors duration-150 disabled:opacity-30"
                           title="Re-prosesser"
                         >

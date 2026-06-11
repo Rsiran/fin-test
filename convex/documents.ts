@@ -237,6 +237,25 @@ export const deleteStorageFile = mutation({
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Ikke autentisert");
+    const identity = await ctx.auth.getUserIdentity();
+    const adminEmails = ["s2419213@bi.no"];
+    const isAdmin = identity?.email && adminEmails.includes(identity.email);
+    // Storage IDs leak to all authenticated users via listByCompany
+    // (markdownFileId is included in the returned documents), so without
+    // a guard anyone could delete other users' files. Block deletion of
+    // any file still referenced by a document the caller doesn't own.
+    const docs = await ctx.db.query("documents").collect();
+    const referencing = docs.find(
+      (d) => d.fileId === args.fileId || d.markdownFileId === args.fileId
+    );
+    if (
+      referencing &&
+      !isAdmin &&
+      referencing.uploadedBy &&
+      referencing.uploadedBy !== userId
+    ) {
+      throw new Error("Ingen tilgang");
+    }
     await ctx.storage.delete(args.fileId);
   },
 });

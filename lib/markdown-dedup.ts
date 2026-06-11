@@ -44,14 +44,17 @@ function overlapRatio(a: string[], b: string[]): number {
 
 function deduplicatePages(pages: Page[]): Page[] {
   const dominated = new Set<number>();
+  // Normalize once up front — doing it inside the O(n²) pair loop
+  // re-normalizes every page's full content up to n times.
+  const normalized = pages.map((p) => normalizeLines(p.content));
 
   for (let i = 0; i < pages.length; i++) {
     if (dominated.has(i)) continue;
-    const linesI = normalizeLines(pages[i].content);
+    const linesI = normalized[i];
 
     for (let j = i + 1; j < pages.length; j++) {
       if (dominated.has(j)) continue;
-      const linesJ = normalizeLines(pages[j].content);
+      const linesJ = normalized[j];
 
       if (overlapRatio(linesI, linesJ) > 0.8) {
         if (linesI.length >= linesJ.length) {
@@ -105,8 +108,13 @@ const CF_KEYWORDS = [
 function classifyLine(line: string): StatementType {
   const lower = line.toLowerCase();
   if (IS_KEYWORDS.some((kw) => lower.includes(kw))) return "income_statement";
-  if (BS_KEYWORDS.some((kw) => lower.includes(kw))) return "balance_sheet";
+  // Cash flow before balance sheet: CF keywords are more specific, and
+  // standard CF rows like "Netto endring i kontanter" contain the BS
+  // keyword "kontanter" — checking BS first misclassifies them, which
+  // makes single-statement cash-flow pages look interleaved and
+  // scrambles their row order.
   if (CF_KEYWORDS.some((kw) => lower.includes(kw))) return "cash_flow";
+  if (BS_KEYWORDS.some((kw) => lower.includes(kw))) return "balance_sheet";
   return null;
 }
 

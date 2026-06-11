@@ -250,10 +250,23 @@ export async function POST(req: NextRequest) {
 
       enqueueProcessing(async () => {
         await processInBackground(convex, typedDocId, companyId, r2Key);
-        // Clean up old markdown only after successful processing
+        // processInBackground swallows errors (it sets status to "error"
+        // instead of rethrowing), so "after the await" does NOT mean
+        // "after success". Verify the new markdown actually replaced the
+        // old file before deleting it — on failure the document still
+        // references oldMarkdownFileId and deleting it would lose the
+        // previously working markdown.
         if (oldMarkdownFileId) {
           try {
-            await convex.mutation(api.documents.deleteStorageFile, { fileId: oldMarkdownFileId });
+            const doc = await convex.query(api.documents.get, { id: typedDocId });
+            if (
+              doc &&
+              doc.status === "ready" &&
+              doc.markdownFileId &&
+              doc.markdownFileId !== oldMarkdownFileId
+            ) {
+              await convex.mutation(api.documents.deleteStorageFile, { fileId: oldMarkdownFileId });
+            }
           } catch {
             console.warn(`Failed to delete old markdown file ${oldMarkdownFileId}`);
           }
